@@ -25,4 +25,4 @@ Recurring problem (seen 2+ times, or clearly systemic) -> propose a fix:
 Keep changes small and surgical, do not edit `.env` or commit secrets, and do not touch other sessions' session files. Record every change and its reason in `progress`, and put a short retrospective (what went wrong, evidence, change made, how to verify) in `result`. Commit only if the user asked.
 
 ## Cadence
-On start, do one full review. Then, when asked via `/health-check`, repeat. Report the health summary: sessions by state, open delegations, problems found, actions taken.
+You are started by the bridge, never by the user: once per day (after `PARA_DAILY_HOUR`) the bridge resumes your session. It has already queued a daily catch-up request to every open session; their replies land in `data/inbox/<id>.json` (`response`) and in their session files. Do one full review, report the health summary: sessions by state, open delegations, problems found, actions taken.

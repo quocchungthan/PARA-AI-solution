@@ -59,6 +59,8 @@ public class BridgeState
 {
     public List<Delegation> Delegations { get; set; } = new();
     public HashSet<string> SeenHandoffs { get; set; } = new();   // "<sessionId>:<handoffId>"
+    public string? LastDailyRun { get; set; }                    // local date yyyy-MM-dd of the last scrum-master run
+    public string? ScrumMasterId { get; set; }                   // reused so the scrum master keeps its context across days
 }
 
 public class Delegation

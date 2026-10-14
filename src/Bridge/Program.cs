@@ -48,7 +48,7 @@ catch (Exception e)
 }
 
 await using var _c = client;
-var scanner = new Scanner(dataDir, Env("PARA_MODEL"), client);
+var scanner = new Scanner(dataDir, Env("PARA_MODEL"), int.TryParse(Env("PARA_DAILY_HOUR"), out var dh) ? dh : 9, client);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; Log.Info("main", "Ctrl+C received, stopping after current pass"); cts.Cancel(); };

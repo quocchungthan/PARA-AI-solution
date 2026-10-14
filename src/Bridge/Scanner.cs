@@ -10,9 +10,11 @@ public class Scanner
     readonly string? _model;
     readonly CopilotClient _client;
     int _pass;
+    readonly int _dailyHour;
 
-    public Scanner(string dataDir, string? model, CopilotClient client)
+    public Scanner(string dataDir, string? model, int dailyHour, CopilotClient client)
     {
+        _dailyHour = dailyHour;
         _sessions = Path.Combine(dataDir, "sessions");
         _inbox = Path.Combine(dataDir, "inbox");
         _statePath = Path.Combine(dataDir, "bridge", "state.json");
@@ -41,6 +43,14 @@ public class Scanner
             if (s is null || s.SessionId.Length == 0) { Log.Warn(C, $"skipping {Path.GetFileName(f)}: unreadable or missing sessionId"); continue; }
             sessions.Add(s);
             Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
+        }
+
+        // Daily catch-up is exclusive: while it runs nothing else is processed; normal work resumes next pass.
+        if (await DailyScrumAsync(state, sessions))
+        {
+            Json.WriteAtomic(_statePath, state);
+            Log.Info(C, $"pass #{pass} was the daily catch-up ({sw.ElapsedMilliseconds}ms); normal processing resumes next pass");
+            return;
         }
 
         // 1. New handoff requests -> delegate to a new or existing session.
@@ -123,12 +133,64 @@ public class Scanner
         Log.Info(C, $"pass #{pass} done in {sw.ElapsedMilliseconds}ms: sessions={sessions.Count} attention={attention.Count} openDelegations={state.Delegations.Count(d => d.Status == "assigned")} failedDelegations={state.Delegations.Count(d => d.Status == "failed")}");
     }
 
+    // Once per local day after PARA_DAILY_HOUR: catch up with every open session one by one, then run the scrum master. Returns true if it ran.
+    async Task<bool> DailyScrumAsync(BridgeState state, List<SessionFile> sessions)
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (state.LastDailyRun == today) { Log.Debug("daily", $"already ran today ({today})"); return false; }
+        if (DateTime.Now.Hour < _dailyHour) { Log.Debug("daily", $"waiting for hour {_dailyHour}"); return false; }
+
+        // Mark first so a crash or long run cannot trigger it again the same day.
+        state.LastDailyRun = today;
+        Json.WriteAtomic(_statePath, state);
+        Log.Info("daily", $"starting daily catch-up for {today}");
+
+        var open = sessions.Where(s => s.State != "done").ToList();
+        foreach (var s in open)
+        {
+            Log.Info("daily", $"catch-up with {s.SessionId} (state={s.State}) ...");
+            try
+            {
+                await FeedAsync(s.SessionId, $"Daily catch-up ({today}). Reply briefly: what you did since last time, current state, anything blocking you or needed from others. Refresh your data/sessions file too.", "scrum-master");
+                Log.Info("daily", $"catch-up with {s.SessionId} done");
+            }
+            catch (Exception e) { Log.Error("daily", $"catch-up with {s.SessionId} failed (continuing)", e); }
+        }
+
+        try
+        {
+            var prompt = $"Daily scrum for {today}. Review the team per your instructions. {open.Count} open session(s) were just asked for a catch-up; their replies are in data/inbox/<id>.json (response) and their session files. Intervene and improve as needed. Reply with a short health summary.";
+            if (state.ScrumMasterId is null)
+            {
+                state.ScrumMasterId = Guid.NewGuid().ToString();
+                Log.Info("daily", $"creating scrum-master session {state.ScrumMasterId}");
+                await using var session = await _client.CreateSessionAsync(new SessionConfig
+                {
+                    SessionId = state.ScrumMasterId,
+                    Model = _model,
+                    Agent = "scrum-master",
+                    OnPermissionRequest = PermissionHandler.ApproveAll,
+                });
+                Attach(session, state.ScrumMasterId);
+                var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt + $" Your session id is {state.ScrumMasterId}." }, TimeSpan.FromMinutes(30));
+                Log.Info("daily", $"scrum master summary: \"{Log.Short((reply?.Data as AssistantMessageData)?.Content, 400)}\"");
+            }
+            else
+            {
+                Log.Info("daily", $"resuming scrum-master session {state.ScrumMasterId}");
+                Log.Info("daily", $"scrum master summary: \"{Log.Short(await ResumeAndSendAsync(state.ScrumMasterId, prompt), 400)}\"");
+            }
+        }
+        catch (Exception e) { Log.Error("daily", "scrum master run failed", e); }
+        return true;
+    }
+
     // Queue via the inbox file so there is a record, then deliver on this same pass.
-    async Task FeedAsync(string sessionId, string prompt)
+    async Task FeedAsync(string sessionId, string prompt, string from = "bridge")
     {
         var path = Path.Combine(_inbox, sessionId + ".json");
         var inbox = File.Exists(path) ? Json.Read<InboxFile>(path) ?? new() : new InboxFile();
-        var m = new InboxMessage { From = "bridge", Prompt = prompt, CreatedAt = Now() };
+        var m = new InboxMessage { From = from, Prompt = prompt, CreatedAt = Now() };
         inbox.Messages.Add(m);
         try
         {
