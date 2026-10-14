@@ -1,0 +1,98 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Bridge;
+
+// data/sessions/<sessionId>.json - written ONLY by the agent session that owns it.
+public class SessionFile
+{
+    public string SessionId { get; set; } = "";
+    public string? Agent { get; set; }
+    public string? Title { get; set; }
+    public string? TaskType { get; set; }          // feature | bug | research | review | ops | other
+    public string? Task { get; set; }
+    // working | waiting_input | pending | blocked | done
+    public string State { get; set; } = "working";
+    public List<string> Needs { get; set; } = new();   // what the session really needs (access, info, decisions)
+    public string? Question { get; set; }
+    public List<ProgressEntry> Progress { get; set; } = new();
+    public string? Result { get; set; }                // final output the bridge can feed back to a requester
+    public Handoff? Handoff { get; set; }
+    public string? UpdatedAt { get; set; }
+}
+
+public class ProgressEntry
+{
+    public string? Ts { get; set; }
+    public string? Note { get; set; }
+}
+
+public class Handoff
+{
+    public string Id { get; set; } = "";           // unique per handoff, set by the agent
+    public string Target { get; set; } = "new";    // "new" or an existing sessionId
+    public string? Agent { get; set; }             // agent name for new sessions
+    public string Prompt { get; set; } = "";
+    public string? Reason { get; set; }
+    public bool WantResult { get; set; } = true;   // feed the target's result back to the origin
+}
+
+// data/inbox/<sessionId>.json - written ONLY by the bridge. Messages fed to a session.
+public class InboxFile
+{
+    public List<InboxMessage> Messages { get; set; } = new();
+}
+
+public class InboxMessage
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string? From { get; set; }              // "user", "bridge", or originating sessionId
+    public string Prompt { get; set; } = "";
+    public string Status { get; set; } = "pending"; // pending | delivered | failed
+    public string? Response { get; set; }
+    public string? CreatedAt { get; set; }
+    public string? DeliveredAt { get; set; }
+}
+
+// data/bridge/state.json - bridge-owned bookkeeping.
+public class BridgeState
+{
+    public List<Delegation> Delegations { get; set; } = new();
+    public HashSet<string> SeenHandoffs { get; set; } = new();   // "<sessionId>:<handoffId>"
+}
+
+public class Delegation
+{
+    public string Key { get; set; } = "";          // "<originId>:<handoffId>"
+    public string OriginId { get; set; } = "";
+    public string TargetId { get; set; } = "";
+    public bool WantResult { get; set; }
+    // assigned | result_fed | failed
+    public string Status { get; set; } = "assigned";
+    public string? CreatedAt { get; set; }
+}
+
+public static class Json
+{
+    public static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNameCaseInsensitive = true,
+    };
+
+    public static T? Read<T>(string path)
+    {
+        // Tolerate a writer mid-write; the next tick will retry.
+        try { return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options); }
+        catch (Exception e) when (e is IOException or JsonException) { return default; }
+    }
+
+    public static void WriteAtomic<T>(string path, T value)
+    {
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(value, Options));
+        File.Move(tmp, path, overwrite: true);
+    }
+}
