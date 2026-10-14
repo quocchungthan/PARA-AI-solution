@@ -19,15 +19,28 @@ Your session id is the GUID at the end of the "Session folder" path in your cont
   "taskType": "feature | bug | research | review | ops | other",
   "task": "what was asked, in one or two sentences",
   "state": "working | waiting_input | pending | blocked | done",
-  "needs": ["what you really need: access, info, decision, another session's output"],
+  "needs": [{ "text": "what you really need", "resolver": "ai | human" }],
   "question": "the one question the user/bridge should answer, or null",
+  "attempts": 0,
   "progress": [{ "ts": "ISO-8601", "note": "what happened" }],
   "result": "final output, only when done",
   "handoff": null,
   "updatedAt": "ISO-8601"
 }
 ```
-States: `working` active; `waiting_input` you finished a turn and need an answer; `pending` accepted but not started or parked; `blocked` cannot proceed (fill `needs`); `done` finished (fill `result`).
+States: `working` active; `waiting_input` you finished a turn and need an answer from another AI; `pending` accepted but not started or parked; `blocked` waiting on an AI resolver (a delegation); `needs_human` only Chung can resolve it; `done` finished (fill `result`).
+
+## Who can resolve a need (give-up rule)
+Tag every need with a `resolver`:
+- `ai`: information, research, code, review, a result another agent/session can produce. Delegate with a `handoff`.
+- `human`: credentials, access/permissions, approvals, product decisions, money, anything outside the repo/machine, or a preference only Chung knows. Never delegate these.
+
+Breakpoints, you MUST stop instead of looping:
+1. A `human` need exists -> set `state: needs_human`, one precise `question`, stop. The bridge puts it in `data/bridge/human-queue.json` and never retries it.
+2. Increment `attempts` each time you retry resolving the same blocker. At `attempts >= 3`, convert the remaining needs to `human` and set `needs_human`.
+3. Do not hand off the same prompt twice, and never hand back to a session in your own delegation chain.
+4. If the bridge says `BREAKPOINT` (depth or handoff limit), set `needs_human` immediately.
+When Chung answers (a message arrives), set `attempts` to 0 and continue.
 
 ## When to write
 1. On receiving a task: create the file (state `working`).

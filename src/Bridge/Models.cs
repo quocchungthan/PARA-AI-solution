@@ -11,14 +11,22 @@ public class SessionFile
     public string? Title { get; set; }
     public string? TaskType { get; set; }          // feature | bug | research | review | ops | other
     public string? Task { get; set; }
-    // working | waiting_input | pending | blocked | done
+    // working | waiting_input | pending | blocked | needs_human | done
+    // needs_human = only Chung can resolve it; the bridge never delegates or retries it, it only surfaces it.
     public string State { get; set; } = "working";
-    public List<string> Needs { get; set; } = new();   // what the session really needs (access, info, decisions)
+    public List<Need> Needs { get; set; } = new();   // what the session really needs
     public string? Question { get; set; }
+    public int Attempts { get; set; }                  // times the agent (or helpers) tried to resolve its blocker
     public List<ProgressEntry> Progress { get; set; } = new();
     public string? Result { get; set; }                // final output the bridge can feed back to a requester
     public Handoff? Handoff { get; set; }
     public string? UpdatedAt { get; set; }
+}
+
+public class Need
+{
+    public string Text { get; set; } = "";
+    public string Resolver { get; set; } = "ai";       // "ai" = another agent/session can solve it; "human" = only Chung (access, credentials, decisions, money, approval)
 }
 
 public class ProgressEntry
@@ -69,7 +77,7 @@ public class Delegation
     public string OriginId { get; set; } = "";
     public string TargetId { get; set; } = "";
     public bool WantResult { get; set; }
-    // assigned | result_fed | failed
+    // assigned | result_fed | failed | limit_reached
     public string Status { get; set; } = "assigned";
     public string? CreatedAt { get; set; }
 }

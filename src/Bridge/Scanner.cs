@@ -10,6 +10,26 @@ public class Scanner
     readonly string? _model;
     readonly CopilotClient _client;
     int _pass;
+    readonly int _maxDepth = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_DEPTH"), out var md) ? md : 3;
+    readonly int _maxHandoffs = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_HANDOFFS"), out var mh) ? mh : 5;
+
+    // How many delegation hops lead to this session (0 = started by a human).
+    static int DepthOf(BridgeState state, string sessionId, int guard = 0)
+    {
+        var parent = state.Delegations.FirstOrDefault(x => x.TargetId == sessionId);
+        return parent is null || guard > 20 ? 0 : 1 + DepthOf(state, parent.OriginId, guard + 1);
+    }
+
+    // Writes data/bridge/human-queue.json: everything only Chung can resolve.
+    void WriteHumanQueue(List<SessionFile> sessions)
+    {
+        var items = sessions
+            .Where(s => s.State == "needs_human" || s.Needs.Any(n => n.Resolver == "human") && s.State != "done")
+            .Select(s => new { s.SessionId, s.Agent, s.Title, s.State, s.Question, Needs = s.Needs.Where(n => n.Resolver == "human").Select(n => n.Text), s.Attempts })
+            .ToList();
+        Json.WriteAtomic(Path.Combine(Path.GetDirectoryName(_statePath)!, "human-queue.json"), items);
+        foreach (var i in items) Log.Warn("human", $"WAITING FOR CHUNG: session {i.SessionId} ({i.Agent}) \"{Log.Short(i.Title, 60)}\" question=\"{Log.Short(i.Question)}\" needs=[{Log.Short(string.Join("; ", i.Needs))}]");
+    }
     readonly int _dailyHour;
 
     public Scanner(string dataDir, string? model, int dailyHour, CopilotClient client)
@@ -61,6 +81,20 @@ public class Scanner
             if (!state.SeenHandoffs.Add(key)) { Log.Debug("handoff", $"{key} already processed"); continue; }
             Log.Info("handoff", $"NEW {key} from={s.SessionId} target={h.Target} agent={h.Agent} wantResult={h.WantResult} reason=\"{Log.Short(h.Reason)}\" prompt=\"{Log.Short(h.Prompt)}\"");
             var d = new Delegation { Key = key, OriginId = s.SessionId, WantResult = h.WantResult, CreatedAt = Now() };
+
+            // Breakpoint: stop endless delegation chains and ping-pong; hand the problem to the human.
+            var depth = DepthOf(state, s.SessionId) + 1;
+            var count = state.Delegations.Count(x => x.OriginId == s.SessionId) + 1;
+            if (depth > _maxDepth || count > _maxHandoffs)
+            {
+                d.Status = "limit_reached";
+                state.Delegations.Add(d);
+                var why = depth > _maxDepth ? $"delegation depth {depth} exceeds {_maxDepth}" : $"{count} handoffs from this session exceeds {_maxHandoffs}";
+                Log.Warn("breakpoint", $"{key} NOT delegated: {why}. Telling origin to escalate to a human.");
+                try { await FeedAsync(s.SessionId, $"BREAKPOINT: your handoff {h.Id} was refused by the bridge ({why}). Do not delegate further. Set state to needs_human, list what only Chung can resolve in needs (resolver: human), state your single question, and stop.", "bridge"); }
+                catch (Exception e) { Log.Error("breakpoint", $"{key} could not notify origin", e); }
+                continue;
+            }
             try
             {
                 var prompt = $"Delegated by session {s.SessionId} ({s.Title}). Reason: {h.Reason}\n\n{h.Prompt}\n\nFollow the para-session-protocol skill and record progress in your own data/sessions file.";
@@ -100,8 +134,8 @@ public class Scanner
             var path = Path.Combine(_sessions, d.TargetId + ".json");
             var target = File.Exists(path) ? Json.Read<SessionFile>(path) : null;
             if (target is null) { Log.Debug("result", $"{d.Key}: target {d.TargetId} has no session file yet (agent has not registered)"); continue; }
-            if (target.State is not ("done" or "waiting_input" or "blocked")) { Log.Debug("result", $"{d.Key}: target {d.TargetId} state={target.State}, still running"); continue; }
-            var msg = $"Result of delegation to session {d.TargetId} (state: {target.State}).\nResult: {target.Result}\nQuestion: {target.Question}\nNeeds: {string.Join("; ", target.Needs)}";
+            if (target.State is not ("done" or "waiting_input" or "blocked" or "needs_human")) { Log.Debug("result", $"{d.Key}: target {d.TargetId} state={target.State}, still running"); continue; }
+            var msg = $"Result of delegation to session {d.TargetId} (state: {target.State}).\nResult: {target.Result}\nQuestion: {target.Question}\nNeeds: {string.Join("; ", target.Needs.Select(n => $"[{n.Resolver}] {n.Text}"))}";
             Log.Info("result", $"{d.Key}: target {d.TargetId} state={target.State}; feeding back to origin {d.OriginId}");
             try { await FeedAsync(d.OriginId, msg); d.Status = "result_fed"; Log.Info("result", $"{d.Key} result_fed"); }
             catch (Exception e) { Log.Error("result", $"{d.Key} feed-back failed (will retry next pass)", e); }
@@ -126,10 +160,11 @@ public class Scanner
         }
 
         Json.WriteAtomic(_statePath, state);
+        WriteHumanQueue(sessions);
 
         var attention = sessions.Where(s => s.State is "waiting_input" or "pending" or "blocked").ToList();
         foreach (var s in attention)
-            Log.Warn("attention", $"session {s.SessionId} state={s.State} question=\"{Log.Short(s.Question)}\" needs=[{Log.Short(string.Join("; ", s.Needs))}]");
+            Log.Warn("attention", $"session {s.SessionId} state={s.State} question=\"{Log.Short(s.Question)}\" needs=[{Log.Short(string.Join("; ", s.Needs.Select(n => n.Text)))}]");
         Log.Info(C, $"pass #{pass} done in {sw.ElapsedMilliseconds}ms: sessions={sessions.Count} attention={attention.Count} openDelegations={state.Delegations.Count(d => d.Status == "assigned")} failedDelegations={state.Delegations.Count(d => d.Status == "failed")}");
     }
 
@@ -145,7 +180,7 @@ public class Scanner
         Json.WriteAtomic(_statePath, state);
         Log.Info("daily", $"starting daily catch-up for {today}");
 
-        var open = sessions.Where(s => s.State != "done").ToList();
+        var open = sessions.Where(s => s.State is not ("done" or "needs_human")).ToList();
         foreach (var s in open)
         {
             Log.Info("daily", $"catch-up with {s.SessionId} (state={s.State}) ...");
