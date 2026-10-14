@@ -10,6 +10,7 @@ public class Scanner
     readonly string? _model;
     readonly CopilotClient _client;
     int _pass;
+    readonly List<string> _agentDirs;
     readonly int _maxDepth = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_DEPTH"), out var md) ? md : 3;
     readonly int _maxHandoffs = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_HANDOFFS"), out var mh) ? mh : 5;
 
@@ -32,8 +33,9 @@ public class Scanner
     }
     readonly int _dailyHour;
 
-    public Scanner(string dataDir, string? model, int dailyHour, CopilotClient client)
+    public Scanner(string dataDir, string repoRoot, string? model, int dailyHour, CopilotClient client)
     {
+        _agentDirs = new() { Path.Combine(repoRoot, ".github", "agents") };
         _dailyHour = dailyHour;
         _sessions = Path.Combine(dataDir, "sessions");
         _inbox = Path.Combine(dataDir, "inbox");
@@ -106,6 +108,7 @@ public class Scanner
                     {
                         SessionId = d.TargetId,
                         Model = _model,
+                        AgentDirectories = _agentDirs,
                         Agent = h.Agent,
                         OnPermissionRequest = PermissionHandler.ApproveAll,
                     });
@@ -197,17 +200,20 @@ public class Scanner
             var prompt = $"Daily scrum for {today}. Review the team per your instructions. {open.Count} open session(s) were just asked for a catch-up; their replies are in data/inbox/<id>.json (response) and their session files. Intervene and improve as needed. Reply with a short health summary.";
             if (state.ScrumMasterId is null)
             {
-                state.ScrumMasterId = Guid.NewGuid().ToString();
-                Log.Info("daily", $"creating scrum-master session {state.ScrumMasterId}");
+                var id = Guid.NewGuid().ToString();
+                Log.Info("daily", $"creating scrum-master session {id}");
                 await using var session = await _client.CreateSessionAsync(new SessionConfig
                 {
-                    SessionId = state.ScrumMasterId,
+                    SessionId = id,
                     Model = _model,
+                    AgentDirectories = _agentDirs,
                     Agent = "scrum-master",
                     OnPermissionRequest = PermissionHandler.ApproveAll,
                 });
-                Attach(session, state.ScrumMasterId);
-                var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt + $" Your session id is {state.ScrumMasterId}." }, TimeSpan.FromMinutes(30));
+                state.ScrumMasterId = id;
+                Json.WriteAtomic(_statePath, state);
+                Attach(session, id);
+                var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt + $" Your session id is {id}." }, TimeSpan.FromMinutes(30));
                 Log.Info("daily", $"scrum master summary: \"{Log.Short((reply?.Data as AssistantMessageData)?.Content, 400)}\"");
             }
             else
@@ -241,6 +247,7 @@ public class Scanner
         Log.Info("sdk", $"resuming session {sessionId}");
         await using var session = await _client.ResumeSessionAsync(sessionId, new ResumeSessionConfig
         {
+            AgentDirectories = _agentDirs,
             OnPermissionRequest = PermissionHandler.ApproveAll,
         });
         Attach(session, sessionId);
