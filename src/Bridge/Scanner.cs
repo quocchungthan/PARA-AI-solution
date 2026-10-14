@@ -5,16 +5,17 @@ namespace Bridge;
 // Single-pass scan. Each file has exactly one writer: agents write data/sessions, the bridge writes data/inbox and data/bridge.
 public class Scanner
 {
-    readonly string _sessions, _inbox, _statePath, _repoRoot;
+    const string C = "scan";
+    readonly string _sessions, _inbox, _statePath;
     readonly string? _model;
     readonly CopilotClient _client;
+    int _pass;
 
-    public Scanner(string dataDir, string repoRoot, string? model, CopilotClient client)
+    public Scanner(string dataDir, string? model, CopilotClient client)
     {
         _sessions = Path.Combine(dataDir, "sessions");
         _inbox = Path.Combine(dataDir, "inbox");
         _statePath = Path.Combine(dataDir, "bridge", "state.json");
-        _repoRoot = repoRoot;
         _model = model;
         _client = client;
         Directory.CreateDirectory(_sessions);
@@ -26,16 +27,29 @@ public class Scanner
 
     public async Task RunOnceAsync()
     {
+        var pass = ++_pass;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Log.Info(C, $"pass #{pass} start");
+
         var state = File.Exists(_statePath) ? Json.Read<BridgeState>(_statePath) ?? new() : new BridgeState();
-        var sessions = Directory.GetFiles(_sessions, "*.json")
-            .Select(Json.Read<SessionFile>).Where(s => s is { SessionId.Length: > 0 }).Select(s => s!).ToList();
+        var files = Directory.GetFiles(_sessions, "*.json");
+        Log.Debug(C, $"found {files.Length} session file(s) in {_sessions}");
+        var sessions = new List<SessionFile>();
+        foreach (var f in files)
+        {
+            var s = Json.Read<SessionFile>(f);
+            if (s is null || s.SessionId.Length == 0) { Log.Warn(C, $"skipping {Path.GetFileName(f)}: unreadable or missing sessionId"); continue; }
+            sessions.Add(s);
+            Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
+        }
 
         // 1. New handoff requests -> delegate to a new or existing session.
         foreach (var s in sessions.Where(s => s.Handoff is { Prompt.Length: > 0 }))
         {
             var h = s.Handoff!;
             var key = $"{s.SessionId}:{h.Id}";
-            if (!state.SeenHandoffs.Add(key)) continue;
+            if (!state.SeenHandoffs.Add(key)) { Log.Debug("handoff", $"{key} already processed"); continue; }
+            Log.Info("handoff", $"NEW {key} from={s.SessionId} target={h.Target} agent={h.Agent} wantResult={h.WantResult} reason=\"{Log.Short(h.Reason)}\" prompt=\"{Log.Short(h.Prompt)}\"");
             var d = new Delegation { Key = key, OriginId = s.SessionId, WantResult = h.WantResult, CreatedAt = Now() };
             try
             {
@@ -43,6 +57,7 @@ public class Scanner
                 if (h.Target.Equals("new", StringComparison.OrdinalIgnoreCase))
                 {
                     d.TargetId = Guid.NewGuid().ToString();
+                    Log.Info("handoff", $"{key} creating NEW session {d.TargetId} agent={h.Agent ?? "(default)"} model={_model ?? "(default)"}");
                     await using var session = await _client.CreateSessionAsync(new SessionConfig
                     {
                         SessionId = d.TargetId,
@@ -50,29 +65,36 @@ public class Scanner
                         Agent = h.Agent,
                         OnPermissionRequest = PermissionHandler.ApproveAll,
                     });
+                    Attach(session, d.TargetId);
                     prompt += $"\nYour session id is {d.TargetId}.";
-                    await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, TimeSpan.FromMinutes(30));
+                    var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, TimeSpan.FromMinutes(30));
+                    Log.Info("handoff", $"{key} new session {d.TargetId} turn finished, reply=\"{Log.Short((reply?.Data as AssistantMessageData)?.Content)}\"");
                 }
                 else
                 {
                     d.TargetId = h.Target;
+                    Log.Info("handoff", $"{key} feeding EXISTING session {d.TargetId}");
                     await FeedAsync(d.TargetId, prompt);
                 }
-                Log($"handoff {key} -> {d.TargetId}");
+                Log.Info("handoff", $"{key} assigned -> {d.TargetId}");
             }
-            catch (Exception e) { d.Status = "failed"; Log($"handoff {key} failed: {e.Message}"); }
+            catch (Exception e) { d.Status = "failed"; Log.Error("handoff", $"{key} FAILED", e); }
             state.Delegations.Add(d);
         }
 
         // 2. Finished delegated work -> feed the result back to the origin session.
-        foreach (var d in state.Delegations.Where(d => d.Status == "assigned" && d.WantResult))
+        var open = state.Delegations.Where(d => d.Status == "assigned" && d.WantResult).ToList();
+        Log.Debug("result", $"{open.Count} open delegation(s) awaiting result");
+        foreach (var d in open)
         {
             var path = Path.Combine(_sessions, d.TargetId + ".json");
             var target = File.Exists(path) ? Json.Read<SessionFile>(path) : null;
-            if (target is null || target.State is not ("done" or "waiting_input" or "blocked")) continue;
+            if (target is null) { Log.Debug("result", $"{d.Key}: target {d.TargetId} has no session file yet (agent has not registered)"); continue; }
+            if (target.State is not ("done" or "waiting_input" or "blocked")) { Log.Debug("result", $"{d.Key}: target {d.TargetId} state={target.State}, still running"); continue; }
             var msg = $"Result of delegation to session {d.TargetId} (state: {target.State}).\nResult: {target.Result}\nQuestion: {target.Question}\nNeeds: {string.Join("; ", target.Needs)}";
-            try { await FeedAsync(d.OriginId, msg); d.Status = "result_fed"; }
-            catch (Exception e) { Log($"feed-back {d.Key} failed: {e.Message}"); }
+            Log.Info("result", $"{d.Key}: target {d.TargetId} state={target.State}; feeding back to origin {d.OriginId}");
+            try { await FeedAsync(d.OriginId, msg); d.Status = "result_fed"; Log.Info("result", $"{d.Key} result_fed"); }
+            catch (Exception e) { Log.Error("result", $"{d.Key} feed-back failed (will retry next pass)", e); }
         }
 
         // 3. Pending inbox messages (user/bridge input) -> resume the session and send.
@@ -81,21 +103,24 @@ public class Scanner
             var inbox = Json.Read<InboxFile>(file);
             if (inbox is null) continue;
             var id = Path.GetFileNameWithoutExtension(file);
-            var changed = false;
-            foreach (var m in inbox.Messages.Where(m => m.Status == "pending"))
+            var pending = inbox.Messages.Where(m => m.Status == "pending").ToList();
+            Log.Debug("inbox", $"{id}: {inbox.Messages.Count} message(s), {pending.Count} pending");
+            foreach (var m in pending)
             {
-                try { m.Response = await ResumeAndSendAsync(id, m.Prompt); m.Status = "delivered"; }
-                catch (Exception e) { m.Status = "failed"; m.Response = e.Message; }
+                Log.Info("inbox", $"{id}: delivering {m.Id} from={m.From} prompt=\"{Log.Short(m.Prompt)}\"");
+                try { m.Response = await ResumeAndSendAsync(id, m.Prompt); m.Status = "delivered"; Log.Info("inbox", $"{id}: {m.Id} delivered"); }
+                catch (Exception e) { m.Status = "failed"; m.Response = e.Message; Log.Error("inbox", $"{id}: {m.Id} FAILED", e); }
                 m.DeliveredAt = Now();
-                changed = true;
             }
-            if (changed) Json.WriteAtomic(file, inbox);
+            if (pending.Count > 0) Json.WriteAtomic(file, inbox);
         }
 
         Json.WriteAtomic(_statePath, state);
 
-        var waiting = sessions.Where(s => s.State is "waiting_input" or "pending" or "blocked").ToList();
-        Log($"scan: {sessions.Count} sessions, {waiting.Count} need attention, {state.Delegations.Count(d => d.Status == "assigned")} delegations open");
+        var attention = sessions.Where(s => s.State is "waiting_input" or "pending" or "blocked").ToList();
+        foreach (var s in attention)
+            Log.Warn("attention", $"session {s.SessionId} state={s.State} question=\"{Log.Short(s.Question)}\" needs=[{Log.Short(string.Join("; ", s.Needs))}]");
+        Log.Info(C, $"pass #{pass} done in {sw.ElapsedMilliseconds}ms: sessions={sessions.Count} attention={attention.Count} openDelegations={state.Delegations.Count(d => d.Status == "assigned")} failedDelegations={state.Delegations.Count(d => d.Status == "failed")}");
     }
 
     // Queue via the inbox file so there is a record, then deliver on this same pass.
@@ -105,21 +130,35 @@ public class Scanner
         var inbox = File.Exists(path) ? Json.Read<InboxFile>(path) ?? new() : new InboxFile();
         var m = new InboxMessage { From = "bridge", Prompt = prompt, CreatedAt = Now() };
         inbox.Messages.Add(m);
-        m.Response = await ResumeAndSendAsync(sessionId, prompt);
-        m.Status = "delivered";
-        m.DeliveredAt = Now();
-        Json.WriteAtomic(path, inbox);
+        try
+        {
+            m.Response = await ResumeAndSendAsync(sessionId, prompt);
+            m.Status = "delivered";
+        }
+        catch { m.Status = "failed"; throw; }
+        finally { m.DeliveredAt = Now(); Json.WriteAtomic(path, inbox); }
     }
 
     async Task<string?> ResumeAndSendAsync(string sessionId, string prompt)
     {
+        Log.Info("sdk", $"resuming session {sessionId}");
         await using var session = await _client.ResumeSessionAsync(sessionId, new ResumeSessionConfig
         {
             OnPermissionRequest = PermissionHandler.ApproveAll,
         });
+        Attach(session, sessionId);
+        Log.Info("sdk", $"sending to {sessionId}: \"{Log.Short(prompt)}\"");
         var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, TimeSpan.FromMinutes(30));
-        return (reply?.Data as AssistantMessageData)?.Content;
+        var content = (reply?.Data as AssistantMessageData)?.Content;
+        Log.Info("sdk", $"{sessionId} replied: \"{Log.Short(content)}\"");
+        return content;
     }
 
-    static void Log(string s) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {s}");
+    // Trace every SDK event so a stuck or failing session is visible.
+    static void Attach(CopilotSession session, string id) =>
+        session.On<SessionEvent>(evt =>
+        {
+            if (evt is AssistantMessageEvent) return;
+            Log.Debug("sdk-event", $"{id} {evt.GetType().Name}");
+        });
 }

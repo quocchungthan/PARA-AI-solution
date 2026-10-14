@@ -86,7 +86,11 @@ public static class Json
     {
         // Tolerate a writer mid-write; the next tick will retry.
         try { return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options); }
-        catch (Exception e) when (e is IOException or JsonException) { return default; }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            Bridge.Log.Warn("json", $"cannot read {path}: {e.Message} (will retry next pass)");
+            return default;
+        }
     }
 
     public static void WriteAtomic<T>(string path, T value)

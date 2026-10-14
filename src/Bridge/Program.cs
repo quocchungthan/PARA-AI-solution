@@ -28,21 +28,37 @@ var dataDir = Path.GetFullPath(Env("PARA_DATA_DIR") ?? "data", root);
 var poll = int.TryParse(Env("PARA_POLL_SECONDS"), out var p) ? p : 15;
 var once = args.Contains("--once");
 
-await using var client = new CopilotClient(new CopilotClientOptions
-{
-    WorkingDirectory = root,
-});
-await client.StartAsync();
+Log.Init(Path.Combine(dataDir, "bridge", "bridge.log"));
+AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Error("fatal", "unhandled exception", e.ExceptionObject as Exception);
 
-var scanner = new Scanner(dataDir, root, Env("PARA_MODEL"), client);
-Console.WriteLine($"PARA bridge watching {dataDir} every {poll}s (Ctrl+C to stop)");
+Log.Info("main", $"starting PARA bridge pid={Environment.ProcessId} root={root} dataDir={dataDir} poll={poll}s once={once} model={Env("PARA_MODEL") ?? "(default)"} envFile={(File.Exists(envFile) ? "loaded" : "missing")}");
+
+CopilotClient client;
+try
+{
+    client = new CopilotClient(new CopilotClientOptions { WorkingDirectory = root });
+    Log.Info("main", "starting Copilot runtime (uses local Copilot sign-in)...");
+    await client.StartAsync();
+    Log.Info("main", "Copilot runtime started");
+}
+catch (Exception e)
+{
+    Log.Error("main", "cannot start Copilot runtime - is Copilot signed in on this machine?", e);
+    return 1;
+}
+
+await using var _c = client;
+var scanner = new Scanner(dataDir, Env("PARA_MODEL"), client);
 
 using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; Log.Info("main", "Ctrl+C received, stopping after current pass"); cts.Cancel(); };
 do
 {
     try { await scanner.RunOnceAsync(); }
-    catch (Exception e) { Console.WriteLine($"scan error: {e.Message}"); }
+    catch (Exception e) { Log.Error("main", "scan pass crashed (will retry)", e); }
     if (once) break;
+    Log.Debug("main", $"sleeping {poll}s");
     try { await Task.Delay(TimeSpan.FromSeconds(poll), cts.Token); } catch (OperationCanceledException) { }
 } while (!cts.IsCancellationRequested);
+Log.Info("main", "bridge stopped");
+return 0;
