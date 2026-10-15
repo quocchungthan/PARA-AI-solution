@@ -102,7 +102,24 @@ public static class Api
         return new
         {
             now = DateTimeOffset.UtcNow,
-            sessions = sessions.OrderByDescending(s => s.UpdatedAt),
+            sessions = sessions.OrderByDescending(s => s.UpdatedAt).Select(s => new
+            {
+                s.SessionId,
+                s.Agent,
+                s.Title,
+                s.TaskType,
+                s.Task,
+                s.State,
+                s.Needs,
+                s.Question,
+                s.Attempts,
+                s.Progress,
+                s.Result,
+                s.Handoff,
+                s.UpdatedAt,
+                stale = SessionHealth.IsStale(s),
+                issues = SessionHealth.Issues(s),
+            }),
             delegations = (File.Exists(statePath) ? Json.Read<BridgeState>(statePath)?.Delegations : null) ?? new(),
             humanQueue = File.Exists(queuePath) ? Json.Read<JsonElement>(queuePath) : default,
             providers = Providers.Status,

@@ -11,6 +11,8 @@ export type Session = {
   attempts: number; progress: { ts?: string; note?: string }[]; result?: string;
   handoff?: { id: string; target: string; agent?: string; prompt: string } | null;
   updatedAt?: string;
+  stale?: boolean;
+  issues?: string[];
 };
 export type Delegation = { key: string; originId: string; targetId: string; status: string; createdAt?: string };
 export type Snapshot = {
@@ -52,7 +54,8 @@ export const changedAt = signal<Record<string, number>>({});
 
 export type Column = "queue" | "running" | "attention" | "done";
 export const columnOf = (s: Session): Column =>
-  s.state === "working" ? "running"
+  s.stale || (s.issues?.length ?? 0) > 0 ? "attention"
+  : s.state === "working" ? "running"
   : s.state === "done" ? "done"
   : s.state === "blocked" || s.state === "needs_human" ? "attention"
   : "queue";

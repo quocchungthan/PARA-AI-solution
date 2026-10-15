@@ -22,6 +22,7 @@ function Card({ s, i }: { s: Session; i: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const name = agentOf(s);
   const note = s.question ?? s.progress.at(-1)?.note;
+  const details = [note, ...(s.issues ?? [])].filter(Boolean).join(" · ");
   const action = actionOf(s);
   const lit = highlighted.value === s.sessionId;
   useEffect(() => {
@@ -32,18 +33,20 @@ function Card({ s, i }: { s: Session; i: number }) {
     openSession.value = s.sessionId;
   };
   return (
-    <div ref={ref} className={`task ${s.state} ${isFresh(s.sessionId) ? "flash" : ""} ${lit ? "highlight" : ""}`}
+    <div ref={ref} className={`task ${s.state} ${s.stale || (s.issues?.length ?? 0) > 0 ? "stale" : ""} ${isFresh(s.sessionId) ? "flash" : ""} ${lit ? "highlight" : ""}`}
       style={{ animationDelay: `${i * 35}ms` }} onClick={open} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && open()}>
       <div className="taskTop">
         <span className="id">{s.sessionId.slice(0, 8)}</span>
         {lit && <span className="newTag">new</span>}
-        <span className="state" style={{ color: STATE_COLOR[s.state] }}>
-          {s.state === "working" && <i className="dot" />} {stateLabel(s)}
+        <span className="state" style={{ color: s.stale || (s.issues?.length ?? 0) > 0 ? "var(--warn)" : STATE_COLOR[s.state] }}>
+          {s.stale || (s.issues?.length ?? 0) > 0
+            ? <Warning weight="fill" />
+            : s.state === "working" && <i className="dot" />} {s.stale ? "Stale" : (s.issues?.length ?? 0) > 0 ? "Protocol issue" : stateLabel(s)}
         </span>
       </div>
       <div className="taskTitle">{titleOf(s)}</div>
-      {note && <div className="taskNote">{note}</div>}
+      {details && <div className="taskNote">{details}</div>}
       <div className="taskFoot">
         <AgentGlyph name={name} size="sm" />
         <span>{name}</span>

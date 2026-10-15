@@ -1,11 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 
 namespace Bridge;
 
 // data/sessions/<sessionId>.json - written ONLY by the agent session that owns it.
 public class SessionFile
 {
+    List<Need> _needs = new();
+    List<ProgressEntry> _progress = new();
+
     public string SessionId { get; set; } = "";
     public string? Agent { get; set; }
     public string? Title { get; set; }
@@ -14,13 +18,73 @@ public class SessionFile
     // working | waiting_input | pending | blocked | needs_human | done
     // needs_human = only Chung can resolve it; the bridge never delegates or retries it, it only surfaces it.
     public string State { get; set; } = "working";
-    public List<Need> Needs { get; set; } = new();   // what the session really needs
+    public List<Need> Needs
+    {
+        get => _needs;
+        set => _needs = value?.Where(n => n is not null).ToList() ?? new();
+    }   // what the session really needs
     public string? Question { get; set; }
     public int Attempts { get; set; }                  // times the agent (or helpers) tried to resolve its blocker
-    public List<ProgressEntry> Progress { get; set; } = new();
+    public List<ProgressEntry> Progress
+    {
+        get => _progress;
+        set => _progress = value?.Where(p => p is not null).ToList() ?? new();
+    }
     public string? Result { get; set; }                // final output the bridge can feed back to a requester
     public Handoff? Handoff { get; set; }
     public string? UpdatedAt { get; set; }
+}
+
+public static class SessionHealth
+{
+    static readonly HashSet<string> KnownStates = new(StringComparer.Ordinal)
+    {
+        "working", "waiting_input", "pending", "blocked", "needs_human", "done",
+    };
+
+    public static TimeSpan StaleAfter
+    {
+        get
+        {
+            return int.TryParse(Environment.GetEnvironmentVariable("PARA_STALE_MINUTES"), out var minutes) && minutes > 0
+                ? TimeSpan.FromMinutes(minutes)
+                : TimeSpan.FromMinutes(10);
+        }
+    }
+
+    public static bool IsStale(SessionFile session, DateTimeOffset? now = null)
+    {
+        if (session.State != "working") return false;
+        if (!DateTimeOffset.TryParse(session.UpdatedAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var updatedAt))
+            return true;
+        return (now ?? DateTimeOffset.UtcNow) - updatedAt.ToUniversalTime() >= StaleAfter;
+    }
+
+    public static List<string> Issues(SessionFile session)
+    {
+        var issues = new List<string>();
+        if (string.IsNullOrWhiteSpace(session.State) || !KnownStates.Contains(session.State))
+        {
+            issues.Add($"unknown state '{session.State}'");
+            return issues;
+        }
+
+        if (session.State == "done" && string.IsNullOrWhiteSpace(session.Result))
+            issues.Add("done state has no result");
+        if (session.State == "waiting_input" && string.IsNullOrWhiteSpace(session.Question))
+            issues.Add("waiting_input state has no question");
+        if (session.State == "blocked" && session.Needs.Count == 0)
+            issues.Add("blocked state has no needs");
+        if (session.State == "needs_human" &&
+            (string.IsNullOrWhiteSpace(session.Question) || !session.Needs.Any(n => n.Resolver == "human")))
+            issues.Add("needs_human state has no question or human-resolvable need");
+        if (session.Attempts >= 3 && session.State != "needs_human" && session.Needs.Count > 0)
+            issues.Add("three or more attempts have not been escalated to needs_human");
+        if (session.Handoff is not null &&
+            (string.IsNullOrWhiteSpace(session.Handoff.Id) || string.IsNullOrWhiteSpace(session.Handoff.Prompt)))
+            issues.Add("handoff has no id or prompt");
+        return issues;
+    }
 }
 
 public class Need

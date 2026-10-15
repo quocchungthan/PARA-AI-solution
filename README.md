@@ -62,8 +62,8 @@ To feed a session input, add `{ "prompt": "...", "status": "pending" }` to `data
 - Agents stop after 3 attempts.
 - Handoffs are refused past `PARA_MAX_DEPTH` (default 3) or `PARA_MAX_HANDOFFS` (default 5).
 
-**Daily:** at `PARA_DAILY_HOUR` (default 9), the Bridge asks every open session for a catch-up, then runs the `scrum-master` agent. Users start work through the `coordinator` agent.
+**Daily:** at `PARA_DAILY_HOUR` (default 9), the Bridge asks recently active, protocol-valid working sessions for a catch-up in parallel (45-second timeout per reply), then runs the `scrum-master` agent (90-second timeout). Working sessions whose `updatedAt` is older than `PARA_STALE_MINUTES` (default 10), and sessions violating required state/question/needs/result fields, are flagged in the dashboard and logs and reported to the scrum master rather than resumed automatically. The Bridge never edits an agent-owned session file. Users start work through the `coordinator` agent.
 
-**Config** (environment variables or `.env`): `PARA_DATA_DIR`, `PARA_POLL_SECONDS`, `PARA_MODEL`, plus the variables above.
+**Config** (environment variables or `.env`): `PARA_DATA_DIR`, `PARA_POLL_SECONDS`, `PARA_MODEL`, `PARA_STALE_MINUTES`, plus the variables above.
 
 **Providers (all optional):** at startup the Bridge probes each provider and logs which are available (also in `/api/snapshot` as `providers`). Copilot is used when signed in; `ANTHROPIC_API_KEY` (Claude) and `GEMINI_API_KEY` (Gemini) are verified with a metadata-only model-list call, never a billed generation. Antigravity stays disabled until Google documents a callable API or .NET SDK. With no runtime available, the Bridge still serves the dashboard and human queue but does not start or resume sessions. Claude/Gemini are detected only so far; running sessions through them is not implemented yet.
