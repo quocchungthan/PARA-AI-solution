@@ -2,6 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // GitHub Pages caches index.html for 10 min and each deploy deletes the old hashed bundles.
+      // If a bundle fails to load, reload once with a cache-busting query to fetch fresh HTML.
+      (function () {
+        if (/[?&]v=/.test(location.search)) {
+          var c = new URL(location.href); c.searchParams.delete("v"); history.replaceState(null, "", c.href);
+        }
+        addEventListener("error", function (e) {
+          var t = e.target;
+          if (!t || (t.tagName !== "SCRIPT" && t.tagName !== "LINK")) return;
+          var k = "asset-reload", n = Date.now();
+          if (n - Number(sessionStorage.getItem(k) || 0) < 30000) return;
+          sessionStorage.setItem(k, String(n));
+          var u = new URL(location.href); u.searchParams.set("v", String(n)); location.replace(u.href);
+        }, true);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bridge · Agent Mission Control</title>
   </head>
