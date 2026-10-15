@@ -66,6 +66,10 @@ function Offline() {
       <pre>{`git clone https://github.com/quocchungthan/PARA-AI-solution
 cd PARA-AI-solution/src/Bridge
 dotnet run`}</pre>
+      <p className="sub">
+        Started it and still offline? Your browser may have asked to allow this site to reach devices on your
+        local network: choose Allow (or enable it in the site settings for this page).
+      </p>
     </div>
   );
 }

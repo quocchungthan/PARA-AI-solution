@@ -60,20 +60,35 @@ function pushHistory(snap: Snapshot) {
   history.value = next;
 }
 
-let source: EventSource | null = null;
+let started = false;
 
-// EventSource reconnects on its own; onopen/onerror drive the online signal.
-export function connect() {
-  if (source) return;
-  source = new EventSource(`${API}/api/stream`);
-  source.onopen = () => (serviceOnline.value = true);
-  source.onerror = () => (serviceOnline.value = false);
-  source.onmessage = (e) => {
-    serviceOnline.value = true;
-    const snap = JSON.parse(e.data) as Snapshot;
+// Polling with a hard timeout: a blocked or unanswered request (e.g. a pending browser
+// local-network permission prompt) ends as "offline" instead of "connecting" forever.
+async function poll() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const r = await fetch(`${API}/api/snapshot`, { signal: ctrl.signal });
+    if (!r.ok) throw new Error(String(r.status));
+    const snap = (await r.json()) as Snapshot;
     snapshot.value = snap;
+    serviceOnline.value = true;
     pushHistory(snap);
+  } catch {
+    serviceOnline.value = false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function connect() {
+  if (started) return;
+  started = true;
+  const loop = async () => {
+    await poll();
+    setTimeout(loop, serviceOnline.value ? 2000 : 4000);
   };
+  loop();
   setInterval(() => (clock.value = new Date()), 1000);
 }
 

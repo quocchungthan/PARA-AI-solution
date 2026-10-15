@@ -13,15 +13,21 @@ src/Bridge/         the scheduled scanner
 
 ## Dashboard (static web + local API)
 
-`web/` is a React + Vite + signals dashboard (Nexus-style mission control: KPIs, agents, orchestration network, work queue, live activity, runtime logs). It is deployed to GitHub Pages by `.github/workflows/pages.yml` and always talks to the local Bridge API at `http://localhost:5310` (read-only, started by `dotnet run` in `src/Bridge`; CORS allows `https://quocchungthan.github.io`). If the Bridge is not running the page tells the user to install and start it.
+`web/` is a React + Vite + signals dashboard (Nexus-style mission control: KPIs, agents, orchestration network, work queue, live activity, runtime logs). It always talks to the local Bridge API at `http://localhost:5310` (read-only, started by `dotnet run` in `src/Bridge`; CORS allows `https://quocchungthan.github.io` and any `http://localhost:*`, and it answers Chrome's Private Network Access preflight). If the Bridge is not running (or the browser blocks local-network access, which it asks about once) the page ends in "offline" and tells the user to install and start it.
 
-```
-cd web && npm install && npm run dev      # develop against a running Bridge
-```
+### Where the UIs live
 
-One-time: Settings → Pages → Source = **GitHub Actions** (repo private, published site public).
+The public repo `quocchungthan/quocchungthan.github.io` builds all three UIs (its `pages.yml`) and publishes them at the site root:
 
-Add to the AFFiNE tools list: add one row to the **Tools** database block (schema: section 9 of `affine-sync-samples.pdf`): Name `PARA Bridge`, Description `Monitor the agent/session cluster. Needs the local Bridge (see README).`, Category `ObserveWatching`, DirectUrl `https://quocchungthan.github.io/PARA-AI-solution/`, Id = next free number.
+| App | Deployed URL | Local dev | Backend |
+|---|---|---|---|
+| Bridge | `https://quocchungthan.github.io/para-bridge/` | `cd web && npm install && npm run dev` → `http://localhost:5173/` | `http://localhost:5310` |
+| tools-w-productioncore-aids | `https://quocchungthan.github.io/tools-w-productioncore-aids/` | `http://localhost:5174/` | `http://localhost:5311` |
+| tools-s-exploring-local | `https://quocchungthan.github.io/tools-s-exploring-local/` | `http://localhost:5175/` | `http://localhost:5312` |
+
+All builds use a relative base (`./`) and no client router, so the same bundle works on the sub-path and locally. Dev ports are fixed (`strictPort`). `.github/workflows/notify-pages.yml` here asks the host repo to redeploy when `web/` changes (secret `PAGES_DISPATCH_TOKEN`: PAT with Contents: write on `quocchungthan.github.io`; optional, otherwise run the host's Pages workflow manually). Host-repo setup is in its README.
+
+Add to the AFFiNE tools list: add one row to the **Tools** database block (schema: section 9 of `affine-sync-samples.pdf`): Name `PARA Bridge`, Description `Monitor the agent/session cluster. Needs the local Bridge (see README).`, Category `ObserveWatching`, DirectUrl `https://quocchungthan.github.io/para-bridge/`, Id = next free number.
 
 Scripts live in `C:\Users\727124\src\prompts`: `para-start-session.sh <agent>` (new window with a session), `para-run-bridge.sh [--once]`.
 

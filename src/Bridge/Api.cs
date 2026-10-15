@@ -15,11 +15,17 @@ public static class Api
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls($"http://localhost:{Port}");
         builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
-            .WithOrigins(PagesOrigin, "http://localhost:5173")
+            .SetIsOriginAllowed(o => o == PagesOrigin || o.StartsWith("http://localhost:") || o.StartsWith("http://127.0.0.1:"))
             .AllowAnyHeader().AllowAnyMethod()
             .SetPreflightMaxAge(TimeSpan.FromMinutes(10))));
 
         var app = builder.Build();
+        // Chrome's Private Network Access preflight needs this to let a public HTTPS page reach localhost.
+        app.Use(async (ctx, next) =>
+        {
+            ctx.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+            await next();
+        });
         app.UseCors();
 
         app.MapGet("/api/health", () => new { ok = true, tool = "para-bridge" });

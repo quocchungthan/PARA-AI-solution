@@ -1,0 +1,22 @@
+name: Notify Pages host
+
+# Asks quocchungthan/quocchungthan.github.io to rebuild the site when the Bridge UI changes.
+# Optional secret PAGES_DISPATCH_TOKEN: fine-grained PAT with Contents:write on quocchungthan.github.io.
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**"]
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ secrets.PAGES_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "PAGES_DISPATCH_TOKEN not set; run the Pages workflow in quocchungthan.github.io manually."; exit 0; fi
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/quocchungthan/quocchungthan.github.io/dispatches \
+            -d '{"event_type":"tool-updated"}'
