@@ -13,7 +13,7 @@ src/Bridge/         the scheduled scanner
 
 ## Dashboard (static web + local API)
 
-`web/` is a React + Vite + signals dashboard (Nexus-style mission control: KPIs, agents, orchestration network, work queue, live activity, runtime logs). It always talks to the local Bridge API at `http://localhost:5310` (read-only, started by `dotnet run` in `src/Bridge`; CORS allows `https://quocchungthan.github.io` and any `http://localhost:*`, and it answers Chrome's Private Network Access preflight). If the Bridge is not running (or the browser blocks local-network access, which it asks about once) the page ends in "offline" and tells the user to install and start it.
+`web/` is a React + Vite + signals dashboard (Nexus-style mission control: KPIs, agents, orchestration network, work queue, live activity, runtime logs). It is animated and interactive: KPIs tween and show sparklines, busy agents get a moving border, the network shows particles flowing to agents with running sessions, and changed sessions flash. Click an agent or node to filter, click a card, dot or activity line to open the session drawer (deep link `#session=<id>`, Esc closes), press `/` to search, and filter or pause the logs. Motion is turned off when the OS asks for reduced motion. It always talks to the local Bridge API at `http://localhost:5310` (read-only, started by `dotnet run` in `src/Bridge`; CORS allows `https://quocchungthan.github.io` and any `http://localhost:*`, and it answers Chrome's Private Network Access preflight). If the Bridge is not running (or the browser blocks local-network access, which it asks about once) the page ends in "offline" and tells the user to install and start it.
 
 ### Where the UIs live
 

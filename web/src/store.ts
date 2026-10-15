@@ -1,4 +1,6 @@
-import { signal, computed } from "@preact/signals-react";
+import { signal, computed, effect } from "@preact/signals-react";
+
+const history_ = window.history;
 
 // The backend is always the local Bridge service.
 export const API = "http://localhost:5310";
@@ -20,6 +22,11 @@ export const snapshot = signal<Snapshot | null>(null);
 export const selectedAgent = signal<string | null>(null);
 export const dark = signal(localStorage.getItem("bridge-theme") !== "light");
 export const clock = signal(new Date());
+export const query = signal("");
+export const openSession = signal<string | null>(null);
+export const pollCount = signal(0);
+// sessionId -> time (ms) its updatedAt last changed, drives the "just changed" flash.
+export const changedAt = signal<Record<string, number>>({});
 
 export type Column = "queue" | "running" | "attention" | "done";
 export const columnOf = (s: Session): Column =>
@@ -36,8 +43,12 @@ export const agents = computed(() => {
   for (const s of sessions.value) map.set(agentOf(s), [...(map.get(agentOf(s)) ?? []), s]);
   return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 });
-export const visibleSessions = computed(() =>
-  selectedAgent.value ? sessions.value.filter((s) => agentOf(s) === selectedAgent.value) : sessions.value);
+export const visibleSessions = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  return sessions.value.filter((s) =>
+    (!selectedAgent.value || agentOf(s) === selectedAgent.value) &&
+    (!q || [s.sessionId, s.title, s.task, agentOf(s), s.state].some((v) => v?.toLowerCase().includes(q))));
+});
 export const counts = computed(() => {
   const c = { queue: 0, running: 0, attention: 0, done: 0 };
   for (const s of sessions.value) c[columnOf(s)]++;
@@ -71,8 +82,17 @@ async function poll() {
     const r = await fetch(`${API}/api/snapshot`, { signal: ctrl.signal });
     if (!r.ok) throw new Error(String(r.status));
     const snap = (await r.json()) as Snapshot;
+    const prev = snapshot.value;
+    if (prev) {
+      const before = new Map(prev.sessions.map((s) => [s.sessionId, s.updatedAt]));
+      const now = Date.now();
+      const next = { ...changedAt.value };
+      for (const s of snap.sessions) if (before.get(s.sessionId) !== s.updatedAt) next[s.sessionId] = now;
+      changedAt.value = next;
+    }
     snapshot.value = snap;
     serviceOnline.value = true;
+    pollCount.value++;
     pushHistory(snap);
   } catch {
     serviceOnline.value = false;
@@ -84,6 +104,15 @@ async function poll() {
 export function connect() {
   if (started) return;
   started = true;
+  // Deep link: #session=<id> opens the detail drawer; kept in sync both ways.
+  const fromHash = () => (openSession.value = new URLSearchParams(location.hash.slice(1)).get("session"));
+  fromHash();
+  window.addEventListener("hashchange", fromHash);
+  effect(() => {
+    const id = openSession.value;
+    const want = id ? `#session=${id}` : "";
+    if (location.hash !== want) history_.replaceState(null, "", want || location.pathname + location.search);
+  });
   const loop = async () => {
     await poll();
     setTimeout(loop, serviceOnline.value ? 2000 : 4000);
