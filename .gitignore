@@ -4,3 +4,5 @@ data/*
 bin/
 obj/
 .vs/
+node_modules/
+dist/

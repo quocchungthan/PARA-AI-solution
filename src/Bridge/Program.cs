@@ -52,6 +52,8 @@ var scanner = new Scanner(dataDir, root, Env("PARA_MODEL"), int.TryParse(Env("PA
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; Log.Info("main", "Ctrl+C received, stopping after current pass"); cts.Cancel(); };
+if (!once)
+    _ = Api.Start(dataDir, cts.Token).ContinueWith(t => Log.Error("api", "dashboard API stopped", t.Exception?.GetBaseException()), TaskContinuationOptions.OnlyOnFaulted);
 do
 {
     try { await scanner.RunOnceAsync(); }

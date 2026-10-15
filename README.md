@@ -11,6 +11,18 @@ data/               git-ignored JSON channel
 src/Bridge/         the scheduled scanner
 ```
 
+## Dashboard (static web + local API)
+
+`web/` is a React + Vite + signals dashboard (Nexus-style mission control: KPIs, agents, orchestration network, work queue, live activity, runtime logs). It is deployed to GitHub Pages by `.github/workflows/pages.yml` and always talks to the local Bridge API at `http://localhost:5310` (read-only, started by `dotnet run` in `src/Bridge`; CORS allows `https://quocchungthan.github.io`). If the Bridge is not running the page tells the user to install and start it.
+
+```
+cd web && npm install && npm run dev      # develop against a running Bridge
+```
+
+One-time: Settings → Pages → Source = **GitHub Actions** (repo private, published site public).
+
+Add to the AFFiNE tools list: add one row to the **Tools** database block (schema: section 9 of `affine-sync-samples.pdf`): Name `PARA Bridge`, Description `Monitor the agent/session cluster. Needs the local Bridge (see README).`, Category `ObserveWatching`, DirectUrl `https://quocchungthan.github.io/PARA-AI-solution/`, Id = next free number.
+
 Scripts live in `C:\Users\727124\src\prompts`: `para-start-session.sh <agent>` (new window with a session), `para-run-bridge.sh [--once]`.
 
 Flow: a session writes its file -> sets `handoff` -> bridge starts a new session (or resumes an existing one) -> target finishes (`done`/`waiting_input`/`blocked`) -> bridge sends the result back into the origin session. To feed any session input, add `{ "prompt": "...", "status": "pending" }` to `data/inbox/<id>.json` messages.
