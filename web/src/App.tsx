@@ -124,8 +124,7 @@ export function App() {
         <button className="icon" onClick={toggleTheme} title="Toggle theme">{isDark ? "☾" : "☀"}</button>
         {online && (c.running
           ? <i key={pollCount.value} className="tick" />
-          : <i className="tick idle" title="Paused: no task running" />)}}
-      </header>
+          : <i className="tick idle"           title="Paused: no task running" />)}      </header>
       <main>
         {online === null && <Skeleton />}
         {online === false && <Offline />}
