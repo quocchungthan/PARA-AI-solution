@@ -158,8 +158,8 @@ public class Scanner
                 try { m.Response = await ResumeAndSendAsync(id, m.Prompt); m.Status = "delivered"; Log.Info("inbox", $"{id}: {m.Id} delivered"); }
                 catch (Exception e) { m.Status = "failed"; m.Response = e.Message; Log.Error("inbox", $"{id}: {m.Id} FAILED", e); }
                 m.DeliveredAt = Now();
+                await InboxStore.UpdateMessageAsync(file, m);
             }
-            if (pending.Count > 0) Json.WriteAtomic(file, inbox);
         }
 
         Json.WriteAtomic(_statePath, state);
@@ -230,16 +230,15 @@ public class Scanner
     async Task FeedAsync(string sessionId, string prompt, string from = "bridge")
     {
         var path = Path.Combine(_inbox, sessionId + ".json");
-        var inbox = File.Exists(path) ? Json.Read<InboxFile>(path) ?? new() : new InboxFile();
         var m = new InboxMessage { From = from, Prompt = prompt, CreatedAt = Now() };
-        inbox.Messages.Add(m);
+        await InboxStore.EnqueueAsync(path, m);
         try
         {
             m.Response = await ResumeAndSendAsync(sessionId, prompt);
             m.Status = "delivered";
         }
         catch { m.Status = "failed"; throw; }
-        finally { m.DeliveredAt = Now(); Json.WriteAtomic(path, inbox); }
+        finally { m.DeliveredAt = Now(); await InboxStore.UpdateMessageAsync(path, m); }
     }
 
     async Task<string?> ResumeAndSendAsync(string sessionId, string prompt)

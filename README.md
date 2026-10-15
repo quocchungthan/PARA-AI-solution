@@ -15,6 +15,7 @@ Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI a
 3. Open the page. If it says offline, allow **local network access** for the site when the browser asks.
 
 Tips: click an agent or a network node to filter. Click a card to open its session (link: `#session=<id>`, Esc closes it). Press `/` to search.
+For sessions that need a human, open the card, enter your answer in **Reply to this session**, and send it. The Bridge queues the reply and delivers it on its next scan.
 
 ## Register in AFFiNE
 
@@ -39,7 +40,7 @@ Valid categories: `SearchCollect`, `ConvertTransformCompose`, `ObserveWatching`,
 
 Copilot CLI sessions coordinate through git-ignored JSON files in `data/`:
 - `data/sessions/<id>.json`: written only by its own session, following the `para-session-protocol` skill.
-- `data/inbox/<id>.json`: input for a session, written only by the Bridge.
+- `data/inbox/<id>.json`: input for a session, written only by the Bridge; the dashboard queues human replies here through the local API.
 - `data/bridge/state.json`: the Bridge's own bookkeeping.
 
 **Flow:**

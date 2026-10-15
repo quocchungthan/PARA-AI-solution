@@ -36,6 +36,18 @@ export const columnOf = (s: Session): Column =>
   : "queue";
 
 export const agentOf = (s: Session) => (s.agent && s.agent !== "unknown" ? s.agent : "unassigned");
+export const needsHumanInput = (s: Session) =>
+  s.state === "needs_human" || (s.state !== "done" && s.needs.some((n) => n.resolver === "human"));
+
+export async function sendHumanReply(sessionId: string, message: string) {
+  const response = await fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  const result = await response.json().catch(() => null) as { error?: string; detail?: string } | null;
+  if (!response.ok) throw new Error(result?.error ?? result?.detail ?? `Reply failed (${response.status}).`);
+}
 
 export const sessions = computed(() => snapshot.value?.sessions ?? []);
 export const agents = computed(() => {

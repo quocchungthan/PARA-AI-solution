@@ -62,7 +62,9 @@ public class InboxMessage
     public string? DeliveredAt { get; set; }
 }
 
-// data/bridge/state.json - bridge-owned bookkeeping.
+public sealed record SessionReplyRequest(string? Message);
+
+// data/bridge/state.json - Bridge-owned bookkeeping.
 public class BridgeState
 {
     public List<Delegation> Delegations { get; set; } = new();

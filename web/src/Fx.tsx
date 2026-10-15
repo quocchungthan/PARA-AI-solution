@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { agentOf, changedAt, clock, openSession, sessions } from "./store";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { agentOf, changedAt, clock, needsHumanInput, openSession, sendHumanReply, sessions } from "./store";
 import { STATE_COLOR, ago, colorOf, initials, stateLabel } from "./util";
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -50,14 +50,47 @@ export const isFresh = (id: string) => clock.value.getTime() - (changedAt.value[
 
 export function Drawer() {
   const id = openSession.value;
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [replyQueued, setReplyQueued] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && (openSession.value = null);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useEffect(() => {
+    setReply("");
+    setSending(false);
+    setReplyError(null);
+    setReplyQueued(false);
+  }, [id]);
   const s = sessions.value.find((x) => x.sessionId === id);
   const now = clock.value.getTime();
   const name = s ? agentOf(s) : "";
+  const canReply = s ? needsHumanInput(s) : false;
+  const submitReply = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = reply.trim();
+    if (!s || !canReply || !message || sending) return;
+
+    const sessionId = s.sessionId;
+    setSending(true);
+    setReplyError(null);
+    setReplyQueued(false);
+    try {
+      await sendHumanReply(sessionId, message);
+      if (openSession.value === sessionId) {
+        setReply("");
+        setReplyQueued(true);
+      }
+    } catch (error) {
+      if (openSession.value === sessionId)
+        setReplyError(error instanceof Error ? error.message : "The reply could not be sent.");
+    } finally {
+      if (openSession.value === sessionId) setSending(false);
+    }
+  };
   return (
     <>
       <div className={`scrim ${s ? "open" : ""}`} onClick={() => (openSession.value = null)} />
@@ -92,6 +125,26 @@ export function Drawer() {
             {s.result && <div className="callout ok"><b>Result</b><p>{s.result}</p></div>}
             {s.handoff && (
               <div className="callout"><b>Handoff → {s.handoff.agent ?? s.handoff.target}</b><p>{s.handoff.prompt}</p></div>
+            )}
+            {canReply && (
+              <>
+                <h4>Reply to this session</h4>
+                <form className="replyForm" onSubmit={(event) => void submitReply(event)}>
+                  <label htmlFor="session-reply">Your response</label>
+                  <textarea id="session-reply" value={reply} rows={4} maxLength={10000}
+                    placeholder="Share the answer or decision this session needs…"
+                    onChange={(event) => {
+                      setReply(event.target.value);
+                      setReplyQueued(false);
+                      setReplyError(null);
+                    }} />
+                  {replyError && <div className="replyFeedback error" role="alert">{replyError}</div>}
+                  {replyQueued && <div className="replyFeedback success" role="status">Reply queued. The Bridge will deliver it to the session.</div>}
+                  <button type="submit" disabled={sending || !reply.trim()}>
+                    {sending ? "Sending…" : "Send reply"}
+                  </button>
+                </form>
+              </>
             )}
             <h4>Progress</h4>
             <ol className="timeline">
