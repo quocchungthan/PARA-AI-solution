@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { agentOf, changedAt, clock, openSession, sessions } from "./store";
-import { STATE_COLOR, ago, colorOf, initials, stateLabel } from "./util";
+import { STATE_COLOR, ago, roleOf, stateLabel } from "./util";
+import { AgentGlyph } from "./Glyph";
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -23,29 +24,6 @@ export function AnimatedNumber({ value }: { value: number }) {
   return <>{shown}</>;
 }
 
-let sparkId = 0;
-export function Spark({ values, color }: { values: number[]; color: string }) {
-  const id = useRef(`sg${sparkId++}`).current;
-  if (values.length < 2) return <svg className="spark" />;
-  const max = Math.max(...values, 1), min = Math.min(...values, 0);
-  const pts = values.map((v, i) => [(i / (values.length - 1)) * 100, 27 - ((v - min) / (max - min || 1)) * 22] as const);
-  const line = pts.map(([x, y]) => `${x},${y}`).join(" ");
-  const [lx, ly] = pts[pts.length - 1];
-  return (
-    <svg className="spark" viewBox="0 0 100 30" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor={color} stopOpacity=".35" />
-          <stop offset="1" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={`0,30 ${line} 100,30`} fill={`url(#${id})`} />
-      <polyline points={line} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-      <circle cx={lx} cy={ly} r="2.2" fill={color} className="sparkDot" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
 export const isFresh = (id: string) => clock.value.getTime() - (changedAt.value[id] ?? 0) < 4000;
 
 export function Drawer() {
@@ -65,9 +43,9 @@ export function Drawer() {
         {s && (
           <>
             <div className="drawerHead">
-              <span className="avatar big" style={{ background: colorOf(name) }}>{initials(name)}</span>
+              <AgentGlyph name={name} size="lg" />
               <div className="grow">
-                <strong>{name}</strong>
+                <strong>{name} <small className="role">{roleOf(name)}</small></strong>
                 <small className="id copy" title="Copy session id" onClick={() => navigator.clipboard?.writeText(s.sessionId)}>
                   {s.sessionId} ⧉
                 </small>

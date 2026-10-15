@@ -1,11 +1,12 @@
 import type { Session } from "./store";
 
-const PALETTE = ["#3b82f6", "#10b981", "#8b5cf6", "#f97316", "#eab308", "#ef4444", "#06b6d4", "#ec4899"];
+// Graphite tones defined per theme in styles.css; identity comes mainly from the role icon.
+const TONES = 6;
 
 export function colorOf(name: string) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return PALETTE[h % PALETTE.length];
+  return `var(--tone-${h % TONES})`;
 }
 
 export const initials = (name: string) =>
@@ -22,8 +23,27 @@ export function ago(iso?: string, now = Date.now()) {
 }
 
 export const STATE_COLOR: Record<string, string> = {
-  working: "var(--accent)", done: "var(--ok)", blocked: "var(--bad)", needs_human: "var(--bad)",
+  working: "var(--ok)", done: "var(--ok)", blocked: "var(--warn)", needs_human: "var(--warn)",
   waiting_input: "var(--warn)", pending: "var(--muted)",
 };
 
 export const stateLabel = (s: Session) => s.state.replace("_", " ");
+
+const ROLES: Record<string, string> = {
+  coordinator: "orchestrator", coder: "implementation", researcher: "investigation",
+  reviewer: "quality gate", "scrum-master": "coaching", unassigned: "no agent set",
+};
+export const roleOf = (name: string) => ROLES[name] ?? "agent";
+
+// Ice-blue action label for sessions that need a human decision.
+export function actionOf(s: Session) {
+  if (s.state === "done" || s.state === "working" || s.state === "pending") return null;
+  if (/\bapprov/i.test(s.question ?? "")) return "Approve";
+  if (s.question) return "Answer";
+  return "Review";
+}
+
+export const titleOf = (s: Session) =>
+  s.title && !s.title.startsWith("(") ? s.title : s.task?.slice(0, 70) ?? "(untitled)";
+
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
