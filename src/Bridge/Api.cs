@@ -105,6 +105,7 @@ public static class Api
             sessions = sessions.OrderByDescending(s => s.UpdatedAt),
             delegations = (File.Exists(statePath) ? Json.Read<BridgeState>(statePath)?.Delegations : null) ?? new(),
             humanQueue = File.Exists(queuePath) ? Json.Read<JsonElement>(queuePath) : default,
+            providers = Providers.Status,
             log = TailLog(Path.Combine(bridgeDir, "bridge.log"), 150),
         };
     }

@@ -33,19 +33,34 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Error("fatal", "unha
 
 Log.Info("main", $"starting PARA bridge pid={Environment.ProcessId} root={root} dataDir={dataDir} poll={poll}s once={once} model={Env("PARA_MODEL") ?? "(default)"} envFile={(File.Exists(envFile) ? "loaded" : "missing")}");
 
-CopilotClient client;
+await Providers.ProbeExternalAsync();
+
+// Copilot is optional too: without a signed-in runtime the Bridge still serves the dashboard and human queue.
+CopilotClient? client = null;
+ProviderStatus copilot;
 try
 {
     client = new CopilotClient(new CopilotClientOptions { WorkingDirectory = root });
     Log.Info("main", "starting Copilot runtime (uses local Copilot sign-in)...");
     await client.StartAsync();
-    Log.Info("main", "Copilot runtime started");
+    var auth = await client.GetAuthStatusAsync();
+    if (auth.IsAuthenticated) copilot = new("copilot", true, "signed in");
+    else
+    {
+        copilot = new("copilot", false, "not signed in");
+        await client.DisposeAsync();
+        client = null;
+    }
 }
 catch (Exception e)
 {
-    Log.Error("main", "cannot start Copilot runtime - is Copilot signed in on this machine?", e);
-    return 1;
+    Log.Error("main", "cannot start Copilot runtime", e);
+    copilot = new("copilot", false, "runtime failed to start");
+    client = null;
 }
+Providers.Report(copilot);
+if (!Providers.Status.Any(s => s.Available))
+    Log.Warn("main", "no agent provider is available: sessions cannot be started or resumed (dashboard and human queue still work)");
 
 await using var _c = client;
 var scanner = new Scanner(dataDir, root, Env("PARA_MODEL"), int.TryParse(Env("PARA_DAILY_HOUR"), out var dh) ? dh : 9, client);

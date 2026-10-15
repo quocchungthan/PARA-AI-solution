@@ -40,7 +40,7 @@ Breakpoints, you MUST stop instead of looping:
 2. Increment `attempts` each time you retry resolving the same blocker. At `attempts >= 3`, convert the remaining needs to `human` and set `needs_human`.
 3. Do not hand off the same prompt twice, and never hand back to a session in your own delegation chain.
 4. If the bridge says `BREAKPOINT` (depth or handoff limit), set `needs_human` immediately.
-When Chung answers (a message arrives), set `attempts` to 0 and continue.
+When Chung answers through the CLI/chat or the Bridge inbox, treat either as human input. In your own session file, set `attempts` to 0, remove resolved human needs, and clear `question` when no human need remains; set `state` to `working` and continue. If a human need is still unresolved, keep `state` as `needs_human` and update the single question. The dashboard reads this file, so it will keep showing `needs_human` until you update it.
 
 ## When to write
 1. On receiving a task: create the file (state `working`).

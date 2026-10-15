@@ -21,7 +21,7 @@ Recurring problem (seen 2+ times, or clearly systemic) -> propose a fix:
 - Agent behaviour or role gaps: edit `.github/agents/*.agent.md`.
 - Protocol ambiguity: edit `.github/skills/para-session-protocol/SKILL.md`.
 - Missing workflow: add a prompt in `.github/prompts/`.
-- Bridge bug, missing log line, missing feature: change `src/Bridge` and verify with `dotnet build` and `dotnet run -- --once`.
+- Bridge bug, missing log line, missing feature: change `src/Bridge` and verify with `dotnet build src/Bridge` and `dotnet run --project src/Bridge -- --once`.
 Keep changes small and surgical, do not edit `.env` or commit secrets, and do not touch other sessions' session files. Record every change and its reason in `progress`, and put a short retrospective (what went wrong, evidence, change made, how to verify) in `result`. Commit only if the user asked.
 
 ## Cadence

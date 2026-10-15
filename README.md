@@ -12,8 +12,7 @@ Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI a
 1. Install the [.NET 10 SDK](https://dotnet.microsoft.com/download) and sign in to GitHub Copilot on this machine. No token is needed.
 2. Run the Bridge:
    ```
-   cd src/Bridge
-   dotnet run
+   dotnet run --project src/Bridge
    ```
 3. Open the page. If it says offline, allow **local network access** for the site when the browser asks.
 
@@ -66,3 +65,5 @@ To feed a session input, add `{ "prompt": "...", "status": "pending" }` to `data
 **Daily:** at `PARA_DAILY_HOUR` (default 9), the Bridge asks every open session for a catch-up, then runs the `scrum-master` agent. Users start work through the `coordinator` agent.
 
 **Config** (environment variables or `.env`): `PARA_DATA_DIR`, `PARA_POLL_SECONDS`, `PARA_MODEL`, plus the variables above.
+
+**Providers (all optional):** at startup the Bridge probes each provider and logs which are available (also in `/api/snapshot` as `providers`). Copilot is used when signed in; `ANTHROPIC_API_KEY` (Claude) and `GEMINI_API_KEY` (Gemini) are verified with a metadata-only model-list call, never a billed generation. Antigravity stays disabled until Google documents a callable API or .NET SDK. With no runtime available, the Bridge still serves the dashboard and human queue but does not start or resume sessions. Claude/Gemini are detected only so far; running sessions through them is not implemented yet.

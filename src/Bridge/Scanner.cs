@@ -8,7 +8,7 @@ public class Scanner
     const string C = "scan";
     readonly string _sessions, _inbox, _statePath;
     readonly string? _model;
-    readonly CopilotClient _client;
+    readonly CopilotClient? _client;
     int _pass;
     readonly List<string> _agentDirs;
     readonly int _maxDepth = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_DEPTH"), out var md) ? md : 3;
@@ -33,7 +33,7 @@ public class Scanner
     }
     readonly int _dailyHour;
 
-    public Scanner(string dataDir, string repoRoot, string? model, int dailyHour, CopilotClient client)
+    public Scanner(string dataDir, string repoRoot, string? model, int dailyHour, CopilotClient? client)
     {
         _agentDirs = new() { Path.Combine(repoRoot, ".github", "agents") };
         _dailyHour = dailyHour;
@@ -65,6 +65,14 @@ public class Scanner
             if (s is null || s.SessionId.Length == 0) { Log.Warn(C, $"skipping {Path.GetFileName(f)}: unreadable or missing sessionId"); continue; }
             sessions.Add(s);
             Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
+        }
+
+        // Without an available agent runtime nothing can be delegated or delivered; keep surfacing the human queue.
+        if (_client is null)
+        {
+            WriteHumanQueue(sessions);
+            Log.Warn(C, $"pass #{pass} skipped delegation/inbox/daily: no agent runtime available");
+            return;
         }
 
         // Daily catch-up is exclusive: while it runs nothing else is processed; normal work resumes next pass.
@@ -104,7 +112,7 @@ public class Scanner
                 {
                     d.TargetId = Guid.NewGuid().ToString();
                     Log.Info("handoff", $"{key} creating NEW session {d.TargetId} agent={h.Agent ?? "(default)"} model={_model ?? "(default)"}");
-                    await using var session = await _client.CreateSessionAsync(new SessionConfig
+                    await using var session = await _client!.CreateSessionAsync(new SessionConfig
                     {
                         SessionId = d.TargetId,
                         Model = _model,
@@ -202,7 +210,7 @@ public class Scanner
             {
                 var id = Guid.NewGuid().ToString();
                 Log.Info("daily", $"creating scrum-master session {id}");
-                await using var session = await _client.CreateSessionAsync(new SessionConfig
+                await using var session = await _client!.CreateSessionAsync(new SessionConfig
                 {
                     SessionId = id,
                     Model = _model,
@@ -244,7 +252,7 @@ public class Scanner
     async Task<string?> ResumeAndSendAsync(string sessionId, string prompt)
     {
         Log.Info("sdk", $"resuming session {sessionId}");
-        await using var session = await _client.ResumeSessionAsync(sessionId, new ResumeSessionConfig
+        await using var session = await _client!.ResumeSessionAsync(sessionId, new ResumeSessionConfig
         {
             AgentDirectories = _agentDirs,
             OnPermissionRequest = PermissionHandler.ApproveAll,
