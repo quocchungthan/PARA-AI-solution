@@ -1,6 +1,9 @@
 # PARA Bridge
 
-Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI agent sessions. It shows agents, the orchestration network, the work queue, live activity and logs.
+Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI agent sessions. Three tabs:
+- **Overview**: the interactive orchestration network (left) and the Bridge logs (right).
+- **Sessions**: the work queue by state, throughput and health.
+- **Agents**: each agent's role, workload and latest signal.
 
 **Open:** https://quocchungthan.github.io/para-bridge/. The page is static and always calls the local Bridge on `http://localhost:5310`.
 
@@ -14,7 +17,11 @@ Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI a
    ```
 3. Open the page. If it says offline, allow **local network access** for the site when the browser asks.
 
-Tips: click an agent or a network node to filter. Click a card to open its session (link: `#session=<id>`, Esc closes it). Press `/` to search.
+Tips:
+- Drag, pan and zoom the network. Click an agent node to dim the others, or a session node to open it.
+- Click a card to open its session (link: `#view=sessions&session=<id>`, Esc closes it). Press `/` to search.
+- The bell next to the theme toggle lights up when a new task enters the work queue. Click the notification to jump to **Sessions** with that task outlined in blue.
+- Logs: **ALL** hides DEBUG lines (use the DEBUG filter to see them). INFO lines that report success (`done`, `delivered`, `result_fed`, `assigned ->`, `started`) are shown as green **OK**.
 For sessions that need a human, open the card, enter your answer in **Reply to this session**, and send it. The Bridge queues the reply and delivers it on its next scan.
 
 ## Register in AFFiNE
@@ -30,6 +37,7 @@ Valid categories: `SearchCollect`, `ConvertTransformCompose`, `ObserveWatching`,
 ## Develop
 
 - UI (React + Vite + signals): `cd web && npm install && npm run dev`, then open http://localhost:5173/.
+- Effects from [React Bits](https://reactbits.dev) (ShinyText, MetallicPaint, ClickSpark, FallingText; TS-CSS flavor) are copied into `web/src/reactbits/` and wired up in `web/src/Effects.tsx`. `ClickSpark` has a small local `selector` prop so only buttons spark. FallingText (with `matter-js`) loads only when the Bridge is offline.
 - The public `quocchungthan.github.io` repo builds and publishes all three tool UIs.
 - `notify-pages.yml` triggers a redeploy with the `PAGES_DISPATCH_TOKEN` secret (stored in the `github-pages` environment).
 - Helper scripts are in `C:\Users\727124\src\prompts`:

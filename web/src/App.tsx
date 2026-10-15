@@ -1,61 +1,27 @@
-import { useEffect, useRef } from "react";
-import { API, agents, clock, columnOf, counts, dark, history, openDelegations, pollCount, query, selectedAgent, serviceOnline, sessions, snapshot, toggleTheme } from "./store";
-import { Activity, Kanban, Logs, Network } from "./Panels";
-import { AnimatedNumber, Drawer, Spark } from "./Fx";
-import { colorOf, initials } from "./util";
+import { useEffect, useRef, useState } from "react";
+import { Bell, Kanban, Lightning, MagnifyingGlass, Moon, SquaresFour, Sun, UsersThree, X, type Icon } from "@phosphor-icons/react";
+import {
+  API, clock, counts, dark, goToSession, markAllRead, notices, page, query, serviceOnline, snapshot,
+  toast, toggleTheme, unread, type Page,
+} from "./store";
+import { AgentCards, Health, Kanban as WorkQueue, Logs, Throughput } from "./Panels";
+import { Network } from "./Network";
+import { Drawer } from "./Fx";
+import { AgentGlyph } from "./Glyph";
+import { BrandName, Logo, OfflineTitle, SessionSpark } from "./Effects";
+import { ago } from "./util";
 
-function Kpi({ label, value, hint, k, color, icon, i }: { label: string; value: number; hint: string; k: string; color: string; icon: string; i: number }) {
-  return (
-    <div className="kpi" style={{ ["--c" as string]: color, animationDelay: `${i * 50}ms` }}>
-      <div className="kpiLabel"><span className="kpiIcon">{icon}</span>{label}</div>
-      <div className="kpiRow"><span className="kpiValue"><AnimatedNumber value={value} /></span><Spark values={history.value[k] ?? []} color={color} /></div>
-      <div className="kpiHint">{hint}</div>
-    </div>
-  );
-}
-
-function AgentCards() {
-  return (
-    <>
-      <div className="sectionHead"><h2>Agents</h2><span>{agents.value.length} agents · {sessions.value.length} sessions · click to filter</span></div>
-      <div className="agentGrid">
-        {agents.value.map(([name, items], idx) => {
-          const c = colorOf(name);
-          const done = items.filter((s) => s.state === "done").length;
-          const running = items.filter((s) => s.state === "working").length;
-          const attention = items.filter((s) => columnOf(s) === "attention").length;
-          const pct = Math.round((done / items.length) * 100);
-          const active = selectedAgent.value === name;
-          const latest = items.flatMap((s) => s.progress).sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? ""))[0]?.note;
-          return (
-            <div key={name} className={`agent ${active ? "active" : ""} ${running ? "busy" : ""}`}
-              style={{ ["--c" as string]: c, animationDelay: `${idx * 45}ms` }}
-              onClick={() => (selectedAgent.value = active ? null : name)}>
-              <div className="agentHead">
-                <span className="avatar big" style={{ background: c }}>{initials(name)}</span>
-                <div><strong>{name}</strong><small>{items.length} session{items.length > 1 ? "s" : ""}</small></div>
-                {running > 0 ? <span className="spinner" /> : <span className="idle">idle</span>}
-              </div>
-              <div className="stats">
-                <div><small>Running</small><b><AnimatedNumber value={running} /></b></div>
-                <div><small>Done</small><b><AnimatedNumber value={done} /></b></div>
-                <div><small>Needs you</small><b className={attention ? "bad" : ""}><AnimatedNumber value={attention} /></b></div>
-              </div>
-              <div className="term"><span className="prompt">›</span> {latest ?? "Idle"}{running > 0 && <span className="caret">▌</span>}</div>
-              <div className="bar"><i style={{ width: `${pct}%`, background: c }} /></div>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
+const TABS: { key: Page; label: string; icon: Icon }[] = [
+  { key: "overview", label: "Overview", icon: SquaresFour },
+  { key: "sessions", label: "Sessions", icon: Kanban },
+  { key: "agents", label: "Agents", icon: UsersThree },
+];
 
 function Offline() {
   return (
     <div className="offline">
-      <div className="offlineIcon">⚡</div>
-      <h2>Bridge service is not running</h2>
+      <div className="offlineIcon"><Lightning weight="fill" /></div>
+      <OfflineTitle />
       <p>
         This page only displays data. The Bridge runs on your machine (<code>{API}</code>) and reads
         your <code>data/</code> folder. Install and start it, then this page reconnects automatically:
@@ -76,7 +42,8 @@ function Search() {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement !== ref.current) { e.preventDefault(); ref.current?.focus(); }
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (e.key === "/" && !typing) { e.preventDefault(); ref.current?.focus(); }
       if (e.key === "Escape" && document.activeElement === ref.current) { query.value = ""; ref.current?.blur(); }
     };
     window.addEventListener("keydown", onKey);
@@ -84,72 +51,144 @@ function Search() {
   }, []);
   return (
     <label className="search">
-      <span>⌕</span>
-      <input ref={ref} value={query.value} onChange={(e) => (query.value = e.target.value)} placeholder="Search sessions…" />
-      {query.value ? <button onClick={() => (query.value = "")}>✕</button> : <kbd>/</kbd>}
+      <MagnifyingGlass />
+      <input ref={ref} value={query.value} aria-label="Search sessions" placeholder="Search sessions…"
+        onChange={(e) => {
+          query.value = e.target.value;
+          if (e.target.value && page.value === "overview") page.value = "sessions";
+        }} />
+      {query.value ? <button onClick={() => (query.value = "")} aria-label="Clear search"><X /></button> : <kbd>/</kbd>}
     </label>
   );
 }
 
-function Skeleton() {
+function Notifications() {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const count = unread.value;
+  const now = clock.value.getTime();
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey); };
+  }, [open]);
   return (
-    <div className="kpis">{Array.from({ length: 6 }, (_, i) => <div key={i} className="kpi skel" />)}</div>
+    <div className="notify" ref={box}>
+      <button className={`icon bell ${count ? "has" : ""}`} onClick={() => { setOpen(!open); toast.value = null; }} aria-expanded={open}
+        aria-label={count ? `${count} new tasks` : "Notifications"} title="New tasks in the work queue">
+        <Bell key={count} weight={count ? "fill" : "regular"} className={count ? "ring" : ""} />
+        {count > 0 && <span className="badgeCount">{count > 9 ? "9+" : count}</span>}
+      </button>
+      {open && (
+        <div className="notifyMenu" role="menu">
+          <div className="notifyHead">
+            <strong>New tasks</strong>
+            {count > 0 && <button className="more" onClick={markAllRead}>Mark all read</button>}
+          </div>
+          {notices.value.length === 0 && <div className="emptyCol">No new tasks yet. You'll be notified here.</div>}
+          {notices.value.map((n) => (
+            <button key={n.id} role="menuitem" className={`notice ${n.read ? "" : "unread"}`}
+              onClick={() => { goToSession(n.sessionId); setOpen(false); }}>
+              <AgentGlyph name={n.agent} size="sm" />
+              <span className="noticeText"><b>{n.title}</b><small>{n.agent} · {n.sessionId.slice(0, 8)} · {ago(new Date(n.at).toISOString(), now)}</small></span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
+}
+
+function Toast() {
+  const t = toast.value;
+  useEffect(() => {
+    if (!t) return;
+    const timer = setTimeout(() => (toast.value = null), 8000);
+    return () => clearTimeout(timer);
+  }, [t]);
+  if (!t) return null;
+  return (
+    <div className="toast" role="status">
+      <button className="toastBody" onClick={() => goToSession(t.sessionId)}>
+        <Bell weight="fill" className="toastIcon" />
+        <span><b>New task in the work queue</b><small>{t.title} · {t.agent}</small></span>
+        <span className="toastGo">View</span>
+      </button>
+      <button className="toastClose" onClick={() => (toast.value = null)} aria-label="Dismiss"><X /></button>
+    </div>
+  );
+}
+
+function Skeleton() {
+  return <div className="overview"><div className="panel skel" /><div className="panel skel" /></div>;
 }
 
 export function App() {
   const online = serviceOnline.value;
   const c = counts.value;
-  const total = sessions.value.length;
   const isDark = dark.value;
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
   const time = clock.value.toLocaleTimeString("en-GB");
   const log = snapshot.value?.log ?? [];
   const lastPass = [...log].reverse().find((l) => l.includes("pass #"))?.match(/pass #\d+/)?.[0];
+  const current = page.value;
 
   return (
     <>
       <header>
         <div className="brand">
-          <span className={`logo ${c.running ? "spinLogo" : ""}`}>⬡</span>
-          <div><strong>Bridge</strong><small>Agent Mission Control</small></div>
+          <Logo light={!isDark} />
+          <div><BrandName light={!isDark} /><small>Agent Mission Control</small></div>
         </div>
+        <nav className="tabs" aria-label="Pages">
+          {TABS.map((t) => {
+            const TabIcon = t.icon;
+            return (
+              <button key={t.key} className={current === t.key ? "on" : ""} aria-current={current === t.key ? "page" : undefined}
+                onClick={() => (page.value = t.key)}>
+                <TabIcon weight="duotone" />{t.label}
+                {t.key === "sessions" && c.attention > 0 && <span className="tabBadge" title="Sessions that need you">{c.attention}</span>}
+              </button>
+            );
+          })}
+        </nav>
         <span className={`pill ${online ? "up" : online === false ? "down" : ""}`}>
-          <i className="dot" /> {online === null ? "Connecting…" : online ? "Local service online" : "Service offline"}
+          <i className="dot" /> {online === null ? "Connecting…" : online ? "Online" : "Offline"}
         </span>
-        {online && lastPass && <span className="pill">Scan {lastPass}</span>}
+        {online && lastPass && <span className="pill scan">Scan {lastPass}</span>}
         <div className="spacer" />
         {online && <Search />}
         <span className="clock">{time}</span>
-        <button className="icon" onClick={toggleTheme} title="Toggle theme">{isDark ? "☾" : "☀"}</button>
-        {online && (c.running
-          ? <i key={pollCount.value} className="tick" />
-          : <i className="tick idle"           title="Paused: no task running" />)}      </header>
+        <Notifications />
+        <button className="icon" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
+          {isDark ? <Moon weight="duotone" /> : <Sun weight="duotone" />}
+        </button>
+      </header>
       <main>
         {online === null && <Skeleton />}
         {online === false && <Offline />}
         {online && snapshot.value && (
-          <>
-            <div className="kpis">
-              <Kpi i={0} icon="◎" label="Sessions" value={total} hint={`${c.running} running now`} k="total" color="#3b82f6" />
-              <Kpi i={1} icon="◔" label="Running" value={c.running} hint="working sessions" k="running" color="#06b6d4" />
-              <Kpi i={2} icon="◉" label="Needs you" value={c.attention} hint="blocked or human-only" k="attention" color="#ef4444" />
-              <Kpi i={3} icon="▤" label="Queue" value={c.queue} hint="pending / waiting for input" k="queue" color="#eab308" />
-              <Kpi i={4} icon="✓" label="Completed" value={c.done} hint={`${total ? Math.round((c.done / total) * 100) : 0}% of all sessions`} k="done" color="#10b981" />
-              <Kpi i={5} icon="⇄" label="Open delegations" value={openDelegations.value} hint="handoffs awaiting result" k="delegations" color="#8b5cf6" />
-            </div>
-            <AgentCards />
-            <div className="split">
-              <Network />
-              <Kanban />
-            </div>
-            <div className="split3">
-              <Activity />
-              <Logs />
-            </div>
-          </>
+          <div key={current} className="page">
+            {current === "overview" && (
+              <div className="overview">
+                <Network />
+                <Logs />
+              </div>
+            )}
+            {current === "sessions" && (
+              <SessionSpark>
+                <WorkQueue />
+                <div className="charts"><Throughput /><Health /></div>
+              </SessionSpark>
+            )}
+            {current === "agents" && <AgentCards />}
+          </div>
         )}
       </main>
+      <Toast />
       <Drawer />
     </>
   );

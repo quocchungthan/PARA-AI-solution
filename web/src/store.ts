@@ -25,6 +25,28 @@ export const clock = signal(new Date());
 export const query = signal("");
 export const openSession = signal<string | null>(null);
 export const pollCount = signal(0);
+
+export type Page = "overview" | "sessions" | "agents";
+export const PAGES: Page[] = ["overview", "sessions", "agents"];
+export const page = signal<Page>("overview");
+// Session card outlined in blue after following a notification.
+export const highlighted = signal<string | null>(null);
+
+export type Notice = { id: string; sessionId: string; title: string; agent: string; at: number; read: boolean };
+export const notices = signal<Notice[]>([]);
+export const unread = computed(() => notices.value.filter((n) => !n.read).length);
+export const toast = signal<Notice | null>(null);
+
+export function goToSession(sessionId: string) {
+  notices.value = notices.value.map((n) => (n.sessionId === sessionId ? { ...n, read: true } : n));
+  toast.value = null;
+  selectedAgent.value = null;
+  query.value = "";
+  page.value = "sessions";
+  highlighted.value = sessionId;
+}
+
+export const markAllRead = () => (notices.value = notices.value.map((n) => ({ ...n, read: true })));
 // sessionId -> time (ms) its updatedAt last changed, drives the "just changed" flash.
 export const changedAt = signal<Record<string, number>>({});
 
@@ -69,18 +91,27 @@ export const counts = computed(() => {
 export const openDelegations = computed(() =>
   (snapshot.value?.delegations ?? []).filter((d) => d.status === "assigned").length);
 
-// Short rolling history per KPI for the sparklines.
-export const history = signal<Record<string, number[]>>({});
-function pushHistory(snap: Snapshot) {
-  const c = { queue: 0, running: 0, attention: 0, done: 0 };
-  for (const s of snap.sessions) c[columnOf(s)]++;
-  const values: Record<string, number> = {
-    total: snap.sessions.length, ...c,
-    delegations: snap.delegations.filter((d) => d.status === "assigned").length,
-  };
-  const next = { ...history.value };
-  for (const [k, v] of Object.entries(values)) next[k] = [...(next[k] ?? []), v].slice(-40);
-  history.value = next;
+// Session ids already known to this browser, so tasks created while the page was closed still notify.
+const SEEN_KEY = "bridge-seen-sessions";
+let seen: Set<string> | null = null;
+function detectNewTasks(snap: Snapshot) {
+  const ids = snap.sessions.map((s) => s.sessionId);
+  if (!seen) {
+    let stored: string[] | null = null;
+    try { stored = JSON.parse(localStorage.getItem(SEEN_KEY) ?? "null"); } catch { /* corrupt entry: start fresh */ }
+    seen = new Set(Array.isArray(stored) ? stored : ids);
+  }
+  const fresh = snap.sessions.filter((s) => !seen!.has(s.sessionId));
+  ids.forEach((id) => seen!.add(id));
+  localStorage.setItem(SEEN_KEY, JSON.stringify(ids));
+  if (!fresh.length) return;
+  const at = Date.now();
+  const added = fresh.map((s): Notice => ({
+    id: `${s.sessionId}-${at}`, sessionId: s.sessionId, agent: agentOf(s), at, read: false,
+    title: s.title && !s.title.startsWith("(") ? s.title : s.task?.slice(0, 80) ?? s.sessionId.slice(0, 8),
+  }));
+  notices.value = [...added.reverse(), ...notices.value].slice(0, 30);
+  toast.value = added[0];
 }
 
 let started = false;
@@ -102,10 +133,10 @@ async function poll() {
       for (const s of snap.sessions) if (before.get(s.sessionId) !== s.updatedAt) next[s.sessionId] = now;
       changedAt.value = next;
     }
+    detectNewTasks(snap);
     snapshot.value = snap;
     serviceOnline.value = true;
     pollCount.value++;
-    pushHistory(snap);
   } catch {
     serviceOnline.value = false;
   } finally {
@@ -116,14 +147,25 @@ async function poll() {
 export function connect() {
   if (started) return;
   started = true;
-  // Deep link: #session=<id> opens the detail drawer; kept in sync both ways.
-  const fromHash = () => (openSession.value = new URLSearchParams(location.hash.slice(1)).get("session"));
+  // Deep link: #view=<page>&session=<id> selects the tab and opens the drawer; kept in sync both ways.
+  const fromHash = () => {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const view = params.get("view") as Page | null;
+    page.value = view && PAGES.includes(view) ? view : "overview";
+    openSession.value = params.get("session");
+  };
   fromHash();
   window.addEventListener("hashchange", fromHash);
   effect(() => {
-    const id = openSession.value;
-    const want = id ? `#session=${id}` : "";
+    const params = new URLSearchParams();
+    if (page.value !== "overview") params.set("view", page.value);
+    if (openSession.value) params.set("session", openSession.value);
+    const hash = params.toString();
+    const want = hash ? `#${hash}` : "";
     if (location.hash !== want) history_.replaceState(null, "", want || location.pathname + location.search);
+  });
+  effect(() => {
+    if (page.value !== "sessions") highlighted.value = null;
   });
   const loop = async () => {
     await poll();

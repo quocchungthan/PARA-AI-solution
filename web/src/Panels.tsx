@@ -1,122 +1,58 @@
 import { useEffect, useRef } from "react";
 import { signal } from "@preact/signals-react";
-import { agentOf, clock, columnOf, openSession, selectedAgent, snapshot, visibleSessions, agents, type Column, type Session } from "./store";
-import { STATE_COLOR, ago, colorOf, initials, stateLabel } from "./util";
-import { isFresh } from "./Fx";
+import { ArrowsClockwise, ChartLineUp, CheckCircle, Gauge, Kanban as KanbanIcon, ListDashes, Pulse, UsersThree, Warning, X, type Icon } from "@phosphor-icons/react";
+import {
+  agentOf, agents, clock, columnOf, highlighted, openSession, page, selectedAgent, sessions, snapshot, visibleSessions,
+  type Column, type Session,
+} from "./store";
+import { STATE_COLOR, actionOf, ago, plural, roleOf, stateLabel, titleOf } from "./util";
+import { AnimatedNumber, isFresh } from "./Fx";
+import { AgentGlyph } from "./Glyph";
 
-const hovered = signal<string | null>(null);
-
-export function Network() {
-  const W = 560, H = 560, cx = W / 2, cy = H / 2, R = 190;
-  const list = agents.value;
-  const nodes = list.map(([name, items], i) => {
-    const a = (i / Math.max(1, list.length)) * Math.PI * 2 - Math.PI / 2;
-    return { name, items, x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, a };
-  });
-  const running = (snapshot.value?.sessions ?? []).filter((s) => s.state === "working").length;
-  return (
-    <section className="panel netPanel">
-      <h3>Orchestration network <span className="chip">{snapshot.value?.sessions.length ?? 0} sessions</span></h3>
-      <p className="sub">BRIDGE → agents → sessions · click a node to filter, a dot to open</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="net">
-        <defs>
-          <radialGradient id="hubGlow">
-            <stop offset="0" stopColor="var(--accent)" stopOpacity=".35" />
-            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle cx={cx} cy={cy} r={110} fill="url(#hubGlow)" className={running ? "breathe" : ""} />
-        {nodes.map((n) => {
-          const busy = n.items.filter((s) => s.state === "working").length;
-          const attention = n.items.filter((s) => columnOf(s) === "attention").length;
-          const c = colorOf(n.name);
-          const path = `M${cx},${cy} L${n.x},${n.y}`;
-          const back = `M${n.x},${n.y} L${cx},${cy}`;
-          const dim = selectedAgent.value && selectedAgent.value !== n.name;
-          return (
-            <g key={n.name} className={dim ? "dim" : ""}>
-              <line x1={cx} y1={cy} x2={n.x} y2={n.y} className={`link ${busy ? "hot" : ""}`} style={busy ? { stroke: c } : undefined} />
-              {Array.from({ length: Math.min(busy, 3) }, (_, i) => (
-                <circle key={`p${i}`} r="3" fill={c} className="particle">
-                  <animateMotion dur="1.8s" begin={`${i * 0.6}s`} repeatCount="indefinite" path={path} />
-                </circle>
-              ))}
-              {attention > 0 && (
-                <circle r="3" fill="var(--bad)" className="particle">
-                  <animateMotion dur="2.4s" repeatCount="indefinite" path={back} />
-                </circle>
-              )}
-            </g>
-          );
-        })}
-        {nodes.map((n) => {
-          const c = colorOf(n.name);
-          const active = selectedAgent.value === n.name;
-          const dim = selectedAgent.value && !active;
-          const busy = n.items.some((s) => s.state === "working");
-          return (
-            <g key={n.name} className={`node ${dim ? "dim" : ""} ${active ? "on" : ""}`}
-              onMouseEnter={() => (hovered.value = n.name)} onMouseLeave={() => (hovered.value = null)}>
-              {n.items.slice(0, 14).map((s, i) => {
-                const ang = n.a + ((i - n.items.length / 2) / 6) * 1.2;
-                const r = 46 + (i % 3) * 8;
-                return (
-                  <circle key={s.sessionId} cx={n.x + Math.cos(ang) * r} cy={n.y + Math.sin(ang) * r} r={hovered.value === n.name ? 5 : 4}
-                    fill={STATE_COLOR[s.state] ?? "var(--muted)"} className={`sdot ${s.state === "working" ? "pulse" : ""}`}
-                    onClick={() => (openSession.value = s.sessionId)}>
-                    <title>{`${s.title ?? s.sessionId} · ${stateLabel(s)}`}</title>
-                  </circle>
-                );
-              })}
-              <g className="nodeCore" onClick={() => (selectedAgent.value = active ? null : n.name)}>
-                {busy && <circle cx={n.x} cy={n.y} r={22} fill="none" stroke={c} className="ripple" />}
-                <circle cx={n.x} cy={n.y} r={active ? 24 : 20} fill="var(--panel)" stroke={c} strokeWidth="2" />
-                <circle cx={n.x} cy={n.y} r={16} fill={c} opacity=".18" />
-                <text x={n.x} y={n.y + 4} textAnchor="middle" className="nodeLetter" fill={c}>{initials(n.name)}</text>
-                <text x={n.x} y={n.y + 38} textAnchor="middle" className="nodeLabel">{n.name}</text>
-              </g>
-            </g>
-          );
-        })}
-        <circle cx={cx} cy={cy} r={48} className="hubRing" />
-        <circle cx={cx} cy={cy} r={42} className="hub" />
-        <circle cx={cx} cy={cy} r={34} className="hubIn" />
-        <text x={cx} y={cy + 4} textAnchor="middle" className="hubText">BRIDGE</text>
-        <text x={cx} y={cy + 17} textAnchor="middle" className="hubSub">{running ? `${running} running` : "orchestrator"}</text>
-      </svg>
-    </section>
-  );
-}
-
-const COLS: { key: Column; label: string; icon: string }[] = [
-  { key: "queue", label: "Queue", icon: "▤" },
-  { key: "running", label: "Running", icon: "◔" },
-  { key: "attention", label: "Needs you", icon: "◉" },
-  { key: "done", label: "Done", icon: "✓" },
+const COLS: { key: Column; label: string; icon: Icon }[] = [
+  { key: "queue", label: "Queue", icon: ListDashes },
+  { key: "running", label: "Running", icon: Pulse },
+  { key: "attention", label: "Needs you", icon: Warning },
+  { key: "done", label: "Done", icon: CheckCircle },
 ];
 
+const byNewest = (a: Session, b: Session) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+
 function Card({ s, i }: { s: Session; i: number }) {
+  const ref = useRef<HTMLDivElement>(null);
   const name = agentOf(s);
-  const c = colorOf(name);
   const note = s.question ?? s.progress.at(-1)?.note;
+  const action = actionOf(s);
+  const lit = highlighted.value === s.sessionId;
+  useEffect(() => {
+    if (lit) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [lit]);
+  const open = () => {
+    if (lit) highlighted.value = null;
+    openSession.value = s.sessionId;
+  };
   return (
-    <div className={`task ${s.state} ${isFresh(s.sessionId) ? "flash" : ""}`} style={{ animationDelay: `${i * 35}ms`, ["--c" as string]: c }}
-      onClick={() => (openSession.value = s.sessionId)} role="button" tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && (openSession.value = s.sessionId)}>
+    <div ref={ref} className={`task ${s.state} ${isFresh(s.sessionId) ? "flash" : ""} ${lit ? "highlight" : ""}`}
+      style={{ animationDelay: `${i * 35}ms` }} onClick={open} role="button" tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && open()}>
       <div className="taskTop">
         <span className="id">{s.sessionId.slice(0, 8)}</span>
+        {lit && <span className="newTag">new</span>}
         <span className="state" style={{ color: STATE_COLOR[s.state] }}>
           {s.state === "working" && <i className="dot" />} {stateLabel(s)}
         </span>
       </div>
-      <div className="taskTitle">{s.title && !s.title.startsWith("(") ? s.title : s.task?.slice(0, 70) ?? "(untitled)"}</div>
+      <div className="taskTitle">{titleOf(s)}</div>
       {note && <div className="taskNote">{note}</div>}
       <div className="taskFoot">
-        <span className="avatar" style={{ background: c }}>{initials(name)}</span>
+        <AgentGlyph name={name} size="sm" />
         <span>{name}</span>
         <span className="when">{ago(s.updatedAt, clock.value.getTime())}</span>
       </div>
-      {s.state === "working" && <div className="scan" />}
+      {action && (
+        <button className="actionBtn" onClick={(e) => { e.stopPropagation(); open(); }}
+          title="Open the session to see what it needs">{action}</button>
+      )}
     </div>
   );
 }
@@ -125,19 +61,29 @@ const PAGE = 5;
 const shown = signal<Partial<Record<Column, number>>>({});
 
 export function Kanban() {
-  const list = visibleSessions.value;
+  const list = [...visibleSessions.value].sort(byNewest);
+  const lit = highlighted.value;
   return (
     <section className="panel">
-      <h3>Work queue {selectedAgent.value && <span className="chip filter" onClick={() => (selectedAgent.value = null)}>{selectedAgent.value} ✕</span>}</h3>
-      <p className="sub">sessions by state, newest first · click a card for details</p>
+      <div className="panelHead">
+        <div>
+          <h2><KanbanIcon weight="duotone" /> Work queue <span className="chip">{plural(list.length, "session")}</span></h2>
+          <p className="sub">Grouped by state · newest first · click a card for details</p>
+        </div>
+        {selectedAgent.value && (
+          <button className="chip filter" onClick={() => (selectedAgent.value = null)}>{selectedAgent.value} <X /></button>
+        )}
+      </div>
       <div className="kanban">
         {COLS.map((col) => {
           const items = list.filter((s) => columnOf(s) === col.key);
-          const limit = shown.value[col.key] ?? PAGE;
+          const litAt = lit ? items.findIndex((s) => s.sessionId === lit) : -1;
+          const limit = Math.max(shown.value[col.key] ?? PAGE, litAt + 1);
           const rest = items.length - limit;
+          const ColIcon = col.icon;
           return (
             <div key={col.key} className={`col ${col.key}`}>
-              <div className="colHead"><span>{col.icon} {col.label}</span><span className="count">{items.length}</span></div>
+              <div className="colHead"><span><ColIcon weight="duotone" /> {col.label}</span><span className="count">{items.length}</span></div>
               <div className="colBody">
                 {items.slice(0, limit).map((s, i) => <Card key={s.sessionId} s={s} i={i} />)}
                 {items.length === 0 && <div className="emptyCol">Nothing here</div>}
@@ -158,73 +104,167 @@ export function Kanban() {
   );
 }
 
-export function Activity() {
+const HOURS = 12;
+export function Throughput() {
   const now = clock.value.getTime();
-  const events = visibleSessions.value
-    .flatMap((s) => s.progress.map((p) => ({ s, ...p })))
-    .sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? ""))
-    .slice(0, 12);
+  const hour = 3600_000;
+  const start = Math.floor(now / hour) * hour - (HOURS - 1) * hour;
+  const started = Array<number>(HOURS).fill(0), done = Array<number>(HOURS).fill(0);
+  const bucket = (iso?: string) => (iso ? Math.floor((new Date(iso).getTime() - start) / hour) : -1);
+  for (const s of sessions.value) {
+    const first = s.progress.map((p) => p.ts).filter(Boolean).sort()[0] ?? s.updatedAt;
+    const b = bucket(first);
+    if (b >= 0 && b < HOURS) started[b]++;
+    const d = s.state === "done" ? bucket(s.updatedAt) : -1;
+    if (d >= 0 && d < HOURS) done[d]++;
+  }
+  const w = 460, h = 150, pad = 6, max = Math.max(2, ...started, ...done);
+  const X = (i: number) => pad + (i / (HOURS - 1)) * (w - 2 * pad);
+  const Y = (v: number) => h - pad - (v / max) * (h - 2 * pad);
+  const line = (d: number[]) => d.map((v, i) => `${i ? "L" : "M"}${X(i)},${Y(v)}`).join(" ");
+  const area = (d: number[]) => `${line(d)} L${X(HOURS - 1)},${h - pad} L${X(0)},${h - pad} Z`;
   return (
     <section className="panel">
-      <h3>Live activity <span className="live"><i className="dot" /> Live</span></h3>
-      <p className="sub">progress notes from all sessions</p>
-      <ul className="feed">
-        {events.map((e) => {
-          const recent = e.ts && now - new Date(e.ts).getTime() < 60000;
-          return (
-            <li key={`${e.s.sessionId}-${e.ts}`} className={recent ? "recent" : ""} onClick={() => (openSession.value = e.s.sessionId)}>
-              <span className="tag" style={{ color: colorOf(agentOf(e.s)) }}>● {agentOf(e.s)}</span>
-              <span className="note">{e.note}</span>
-              <span className="when">{ago(e.ts, now)}</span>
-            </li>
-          );
-        })}
-        {events.length === 0 && <li className="empty">No activity yet.</li>}
-      </ul>
+      <h2><ChartLineUp weight="duotone" /> Throughput</h2>
+      <p className="sub">Sessions started vs. completed per hour · last {HOURS}h</p>
+      <svg className="area" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img"
+        aria-label={`Started ${started.reduce((a, b) => a + b, 0)}, completed ${done.reduce((a, b) => a + b, 0)} in the last ${HOURS} hours`}>
+        <defs>
+          <linearGradient id="thrStarted" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--tone-2)" stopOpacity=".25" /><stop offset="1" stopColor="var(--tone-2)" stopOpacity="0" /></linearGradient>
+          <linearGradient id="thrDone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--ok)" stopOpacity=".35" /><stop offset="1" stopColor="var(--ok)" stopOpacity="0" /></linearGradient>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => <line key={t} x1={pad} x2={w - pad} y1={pad + t * (h - 2 * pad)} y2={pad + t * (h - 2 * pad)} className="gridLine" />)}
+        <path d={area(started)} fill="url(#thrStarted)" />
+        <path d={line(started)} fill="none" stroke="var(--tone-2)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path d={area(done)} fill="url(#thrDone)" />
+        <path d={line(done)} fill="none" stroke="var(--ok)" strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="legend"><span><i style={{ background: "var(--tone-2)" }} />Started</span><span><i style={{ background: "var(--ok)" }} />Completed</span></div>
     </section>
   );
 }
 
-const LEVELS = ["ALL", "INFO", "WARN", "ERROR"] as const;
-const level = signal<(typeof LEVELS)[number]>("ALL");
+export function Health() {
+  const all = sessions.value;
+  const list = agents.value;
+  const dels = snapshot.value?.delegations ?? [];
+  const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+  const bars = [
+    { label: "Completion rate", value: pct(all.filter((s) => s.state === "done").length, all.length), color: "var(--ok)" },
+    { label: "Agent utilization", value: pct(list.filter(([, items]) => items.some((s) => s.state === "working")).length, list.length), color: "var(--tone-0)" },
+    { label: "Delegations resolved", value: pct(dels.filter((d) => d.status === "result_fed").length, dels.length), color: "var(--info)" },
+  ];
+  return (
+    <section className="panel">
+      <h2><Gauge weight="duotone" /> Health</h2>
+      <p className="sub">Live ratios across all sessions</p>
+      {bars.map((b) => (
+        <div key={b.label} className="bullet">
+          <span>{b.label}</span>
+          <div className="track"><i style={{ width: `${b.value}%`, background: b.color }} /></div>
+          <b><AnimatedNumber value={b.value} />%</b>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+export function AgentCards() {
+  const list = agents.value;
+  return (
+    <>
+      <div className="pageHead">
+        <h2><UsersThree weight="duotone" /> Agents <span className="chip">{plural(list.length, "agent")}</span></h2>
+        <p className="sub">Role, workload and latest signal · click an agent to see its sessions</p>
+      </div>
+      <div className="agentGrid">
+        {list.map(([name, items], idx) => {
+          const done = items.filter((s) => s.state === "done").length;
+          const running = items.filter((s) => s.state === "working").length;
+          const attention = items.filter((s) => columnOf(s) === "attention").length;
+          const pct = Math.round((done / items.length) * 100);
+          const latest = items.flatMap((s) => s.progress).sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? ""))[0]?.note;
+          return (
+            <button key={name} className={`agent ${running ? "busy" : ""}`} style={{ animationDelay: `${idx * 45}ms` }}
+              onClick={() => { selectedAgent.value = name; page.value = "sessions"; }}>
+              <div className="agentHead">
+                <AgentGlyph name={name} size="lg" />
+                <div><strong>{name}</strong><small>{roleOf(name)} · {plural(items.length, "session")}</small></div>
+                {running > 0
+                  ? <span className="statusTag run"><i className="dot" />{running} running</span>
+                  : <span className="statusTag">idle</span>}
+              </div>
+              <div className="stats">
+                <div><small>Done</small><b><AnimatedNumber value={done} /></b></div>
+                <div><small>Running</small><b><AnimatedNumber value={running} /></b></div>
+                <div><small>Needs you</small><b className={attention ? "warn" : ""}><AnimatedNumber value={attention} /></b></div>
+              </div>
+              <div className="bar"><i style={{ width: `${pct}%` }} /></div>
+              <div className="term"><span className="prompt">›</span> {latest ?? "Idle"}{running > 0 && <span className="caret">▌</span>}</div>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// Bridge only writes DEBUG/INFO/WARN/ERROR; INFO lines that report success are shown as OK.
+const OK_RE = /\b(done|delivered|result_fed|started)\b|assigned ->/;
+const LEVELS = ["ALL", "INFO", "OK", "WARN", "ERROR", "DEBUG"] as const;
+type Level = (typeof LEVELS)[number];
+const level = signal<Level>("ALL");
 const follow = signal(true);
+// "ALL" hides DEBUG chatter; the DEBUG filter shows it on demand.
+const matches = (lv: string, want: Level) => (want === "ALL" ? lv !== "DEBUG" : lv === want);
 
 export function Logs() {
   const lines = snapshot.value?.log ?? [];
-  const ref = useRef<HTMLPreElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const seen = new Map<string, number>();
+  let prev = "";
   const parsed = lines.slice(-200).map((l) => {
     const n = (seen.get(l) ?? 0) + 1;
     seen.set(l, n);
     const key = `${l}#${n}`;
-    const m = l.match(/^(\S+)T(\S+?)(?:\.\d+)?\s+(\w+)\s+(.*)$/);
-    return m ? { t: m[2], lv: m[3], msg: m[4], key } : { t: "", lv: "", msg: l, key };
+    const m = l.match(/^\S+T(\d\d:\d\d:\d\d)\S*\s+(\w+)\s+(?:\[([^\]]+)\]\s+)?(.*)$/);
+    if (!m) return { t: "", lv: prev, c: "", msg: l, key, cont: true };
+    const lv = m[2] === "INFO" && OK_RE.test(m[4]) ? "OK" : m[2];
+    prev = lv;
+    return { t: m[1], lv, c: m[3] ?? "", msg: m[4], key, cont: false };
   });
-  const shownLines = parsed.filter((p) => level.value === "ALL" || p.lv === level.value).slice(-80);
+  const rows = parsed.filter((p) => matches(p.lv, level.value)).slice(-120);
   useEffect(() => {
     if (follow.value && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   });
   return (
-    <section className="panel">
-      <h3>
-        Runtime logs
-        <span className="seg">
-          {LEVELS.map((l) => (
-            <button key={l} className={level.value === l ? "on" : ""} onClick={() => (level.value = l)}>{l}</button>
-          ))}
-        </span>
+    <section className="console" aria-labelledby="logs-title">
+      <div className="consoleBar">
+        <span className="tl" aria-hidden><i /><i /><i /></span>
+        <h2 id="logs-title">Logs</h2>
+        <span className="path">bridge.log · {lines.length} lines</span>
         <button className={`chip toggle ${follow.value ? "on" : ""}`} onClick={() => (follow.value = !follow.value)}
-          title="Auto-scroll to newest">{follow.value ? "⏵ following" : "⏸ paused"}</button>
-      </h3>
-      <p className="sub">bridge · bridge.log · {lines.length} lines</p>
-      <pre className="logs" ref={ref} onWheel={(e) => e.deltaY < 0 && (follow.value = false)}>
-        {shownLines.map((p) => (
-          <div key={p.key} className="logLine">
-            {p.t ? <><span className="t">{p.t}</span> <span className={`lv ${p.lv}`}>{p.lv.padEnd(5)}</span> {p.msg}</> : p.msg}
+          title="Auto-scroll to newest" aria-pressed={follow.value}>
+          <ArrowsClockwise /> {follow.value ? "following" : "paused"}
+        </button>
+      </div>
+      <div className="seg" role="group" aria-label="Filter logs by level">
+        {LEVELS.map((l) => (
+          <button key={l} className={`${l} ${level.value === l ? "on" : ""}`} aria-pressed={level.value === l}
+            title={l === "ALL" ? "All levels except DEBUG" : undefined} onClick={() => (level.value = l)}>{l}</button>
+        ))}
+      </div>
+      <div className="stream" ref={ref} tabIndex={0} role="log" aria-label="Runtime logs"
+        onWheel={(e) => e.deltaY < 0 && (follow.value = false)}>
+        {rows.map((p) => (
+          <div key={p.key} className={`logLine ${p.lv} ${p.cont ? "cont" : ""}`}>
+            <span className="t">{p.t}</span>
+            <span className={`lv ${p.lv}`}>{p.cont ? "" : p.lv}</span>
+            <span className="msg">{p.c && <span className="comp">[{p.c}]</span>} {p.msg}</span>
           </div>
         ))}
-        {follow.value && <span className="caret">▌</span>}
-      </pre>
+        {rows.length === 0 && <div className="emptyCol">No {level.value === "ALL" ? "" : level.value + " "}lines yet.</div>}
+      </div>
     </section>
   );
 }
