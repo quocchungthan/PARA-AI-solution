@@ -64,6 +64,8 @@ main { padding:18px 22px 40px; max-width:1500px; margin:0 auto; }
 .colHead { display:flex; justify-content:space-between; font-weight:600; padding:2px 4px 8px; }
 .count { color:var(--muted); background:var(--panel); border-radius:6px; padding:0 7px; font-weight:400; }
 .colBody { display:flex; flex-direction:column; gap:8px; }
+.more { background:none; border:none; color:var(--accent); cursor:pointer; font-size:12px; padding:6px; text-align:center; }
+.more:hover { text-decoration:underline; }
 .task { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 10px; }
 .taskTop { display:flex; justify-content:space-between; font-size:11px; } .id { color:var(--muted); } .state { text-transform:capitalize; }
 .taskTitle { margin:3px 0; font-weight:600; }

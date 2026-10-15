@@ -1,3 +1,4 @@
+import { signal } from "@preact/signals-react";
 import { agentOf, clock, columnOf, selectedAgent, snapshot, visibleSessions, agents, type Column, type Session } from "./store";
 import { STATE_COLOR, ago, colorOf, initials, stateLabel } from "./util";
 
@@ -73,6 +74,9 @@ function Card({ s }: { s: Session }) {
   );
 }
 
+const PAGE = 5;
+const shown = signal<Partial<Record<Column, number>>>({});
+
 export function Kanban() {
   const list = visibleSessions.value;
   return (
@@ -82,10 +86,22 @@ export function Kanban() {
       <div className="kanban">
         {COLS.map((col) => {
           const items = list.filter((s) => columnOf(s) === col.key);
+          const limit = shown.value[col.key] ?? PAGE;
+          const rest = items.length - limit;
           return (
             <div key={col.key} className="col">
               <div className="colHead"><span>{col.icon} {col.label}</span><span className="count">{items.length}</span></div>
-              <div className="colBody">{items.slice(0, 8).map((s) => <Card key={s.sessionId} s={s} />)}</div>
+              <div className="colBody">
+                {items.slice(0, limit).map((s) => <Card key={s.sessionId} s={s} />)}
+                {rest > 0 && (
+                  <button className="more" onClick={() => (shown.value = { ...shown.value, [col.key]: limit + PAGE })}>
+                    Show {Math.min(PAGE, rest)} more ({rest} hidden)
+                  </button>
+                )}
+                {limit > PAGE && rest <= 0 && (
+                  <button className="more" onClick={() => (shown.value = { ...shown.value, [col.key]: PAGE })}>Show less</button>
+                )}
+              </div>
             </div>
           );
         })}
