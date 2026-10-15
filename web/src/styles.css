@@ -38,6 +38,7 @@ header { display:flex; align-items:center; gap:10px; padding:10px 22px; border-b
 .icon { background:var(--panel); border:1px solid var(--line); color:var(--text); border-radius:8px; width:32px; height:32px; cursor:pointer; transition:transform .15s, border-color .15s; }
 .icon:hover { border-color:var(--accent); transform:translateY(-1px); } .icon:active { transform:scale(.95); }
 .tick { position:absolute; left:0; bottom:-1px; height:2px; width:100%; background:linear-gradient(90deg, transparent, var(--accent)); transform-origin:left; animation:tick 2s linear forwards; opacity:.7; }
+.tick.idle { animation:none; transform:scaleX(1); opacity:.15; background:var(--muted); transition:opacity .4s; }
 
 .search { display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:0 8px; height:32px; width:260px; color:var(--muted); transition:border-color .2s, width .25s, box-shadow .2s; }
 .search:focus-within { border-color:var(--accent); width:320px; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }

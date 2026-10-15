@@ -122,7 +122,9 @@ export function App() {
         {online && <Search />}
         <span className="clock">{time}</span>
         <button className="icon" onClick={toggleTheme} title="Toggle theme">{isDark ? "☾" : "☀"}</button>
-        {online && <i key={pollCount.value} className="tick" />}
+        {online && (c.running
+          ? <i key={pollCount.value} className="tick" />
+          : <i className="tick idle" title="Paused: no task running" />)}}
       </header>
       <main>
         {online === null && <Skeleton />}
