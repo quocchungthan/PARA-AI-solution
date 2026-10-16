@@ -9,8 +9,11 @@ public static class Api
     const string PagesOrigin = "https://quocchungthan.github.io";
     static readonly JsonSerializerOptions Compact = new(Json.Options) { WriteIndented = false };
 
-    public static Task Start(string dataDir, CancellationToken ct)
+    static string _agentsDir = "";
+
+    public static Task Start(string dataDir, CancellationToken ct, string agentsDir = "")
     {
+        _agentsDir = agentsDir;
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls($"http://localhost:{Port}");
@@ -102,6 +105,9 @@ public static class Api
         return new
         {
             now = DateTimeOffset.UtcNow,
+            roles = _agentsDir.Length > 0 && Directory.Exists(_agentsDir)
+                ? Directory.GetFiles(_agentsDir, "*.agent.md").Select(f => Path.GetFileName(f)[..^".agent.md".Length]).Order().ToList()
+                : new List<string>(),
             sessions = sessions.OrderByDescending(s => s.UpdatedAt).Select(s => new
             {
                 s.SessionId,

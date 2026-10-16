@@ -11,6 +11,8 @@ public class Scanner
     readonly CopilotClient? _client;
     int _pass;
     readonly List<string> _agentDirs;
+    // Every session is pinned to the PARA-AI-solution root so it is listed by `copilot --resume` there.
+    readonly string _root;
     readonly int _maxDepth = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_DEPTH"), out var md) ? md : 3;
     readonly int _maxHandoffs = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_HANDOFFS"), out var mh) ? mh : 5;
     static readonly TimeSpan DailyCatchUpTimeout = TimeSpan.FromSeconds(45);
@@ -38,6 +40,7 @@ public class Scanner
     public Scanner(string dataDir, string repoRoot, string? model, int dailyHour, CopilotClient? client)
     {
         _agentDirs = new() { Path.Combine(repoRoot, ".github", "agents") };
+        _root = repoRoot;
         _dailyHour = dailyHour;
         _sessions = Path.Combine(dataDir, "sessions");
         _inbox = Path.Combine(dataDir, "inbox");
@@ -115,18 +118,24 @@ public class Scanner
                 {
                     d.TargetId = Guid.NewGuid().ToString();
                     Log.Info("handoff", $"{key} creating NEW session {d.TargetId} agent={h.Agent ?? "(default)"} model={_model ?? "(default)"}");
-                    await using var session = await _client!.CreateSessionAsync(new SessionConfig
+                    // Not `await using`: the background turn owns the session and disposes it when finished.
+                    var session = await _client!.CreateSessionAsync(new SessionConfig
                     {
                         SessionId = d.TargetId,
+                        WorkingDirectory = _root,
                         Model = _model,
                         AgentDirectories = _agentDirs,
                         Agent = h.Agent,
                         OnPermissionRequest = PermissionHandler.ApproveAll,
                     });
-                    Attach(session, d.TargetId);
-                    prompt += $"\nYour session id is {d.TargetId}.";
-                    // Fire and forget: the result comes back through the target's session file (step 2), not this turn.
-                    StartBackgroundTurn(session, d.TargetId, key, prompt);
+                    try
+                    {
+                        Attach(session, d.TargetId);
+                        prompt += $"\nYour session id is {d.TargetId}.";
+                        // Fire and forget: the result comes back through the target's session file (step 2), not this turn.
+                        StartBackgroundTurn(session, d.TargetId, key, prompt);
+                    }
+                    catch { await session.DisposeAsync(); throw; }
                 }
                 else
                 {
@@ -238,6 +247,7 @@ public class Scanner
                 await using var session = await _client!.CreateSessionAsync(new SessionConfig
                 {
                     SessionId = id,
+                    WorkingDirectory = _root,
                     Model = _model,
                     AgentDirectories = _agentDirs,
                     Agent = "scrum-master",
@@ -296,6 +306,7 @@ public class Scanner
         Log.Info("sdk", $"resuming session {sessionId}");
         await using var session = await _client!.ResumeSessionAsync(sessionId, new ResumeSessionConfig
         {
+            WorkingDirectory = _root,
             AgentDirectories = _agentDirs,
             OnPermissionRequest = PermissionHandler.ApproveAll,
         });

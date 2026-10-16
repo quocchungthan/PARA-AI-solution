@@ -79,8 +79,8 @@ export function Drawer() {
               <AgentGlyph name={name} size="lg" />
               <div className="grow">
                 <strong>{name} <small className="role">{roleOf(name)}</small></strong>
-                <small className="id copy" title="Copy session id" onClick={() => navigator.clipboard?.writeText(s.sessionId)}>
-                  {s.sessionId} ⧉
+                <small className="id copy" title="Copy resume command" onClick={() => navigator.clipboard?.writeText(`copilot --allow-all --resume=${s.sessionId}`)}>
+                  {s.sessionId} ⧉ copy resume command
                 </small>
               </div>
               <span className="badge" style={{ color: STATE_COLOR[s.state], borderColor: STATE_COLOR[s.state] }}>
