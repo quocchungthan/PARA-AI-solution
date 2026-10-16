@@ -48,7 +48,7 @@ When Chung answers through the CLI/chat or the Bridge inbox, treat either as hum
 3. Before asking anything or ending a turn: set `state`/`question`/`needs`.
 4. On completion: `state: done` and `result`.
 5. On every new user request or follow-up in a session that is `done` (or otherwise not `working`): FIRST set `state: working`, refresh `task`/`title` if the focus changed, clear `result`, and keep logging `progress`. When the follow-up turn ends, set `state` and `result` again so they describe all the work so far. The bridge stops scanning `done` sessions, so work done under a stale `done` state is invisible to it.
-Read-modify-write the whole file; keep it valid JSON. Use only the fields in the schema above.
+Read-modify-write the whole file; keep it valid JSON. Use only the fields in the schema above. Update existing properties rather than appending a second copy: every property name must occur exactly once, since duplicate JSON keys can be interpreted inconsistently by parsers.
 
 ## Handoff / delegation
 To delegate part of the work, set `handoff` (set `state` to `waiting_input` unless you can continue meanwhile):
