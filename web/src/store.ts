@@ -12,6 +12,8 @@ export type Session = {
   handoff?: { id: string; target: string; agent?: string; prompt: string } | null;
   updatedAt?: string;
   stale?: boolean;
+  silent?: boolean;
+  lastActivityAt?: string | null;
   issues?: string[];
 };
 export type Delegation = { key: string; originId: string; targetId: string; status: string; createdAt?: string };
@@ -54,15 +56,38 @@ export const changedAt = signal<Record<string, number>>({});
 
 export type Column = "queue" | "running" | "attention" | "done";
 export const columnOf = (s: Session): Column =>
-  s.stale || (s.issues?.length ?? 0) > 0 ? "attention"
+  s.stale || s.silent || (s.issues?.length ?? 0) > 0 ? "attention"
   : s.state === "working" ? "running"
   : s.state === "done" ? "done"
-  : s.state === "blocked" || s.state === "needs_human" ? "attention"
+  : s.state === "needs_human" || (s.state === "blocked" && needsHumanInput(s)) ? "attention"
   : "queue";
 
 export const agentOf = (s: Session) => (s.agent && s.agent !== "unknown" ? s.agent : "unassigned");
-export const needsHumanInput = (s: Session) =>
-  s.state === "needs_human" || (s.state !== "done" && s.needs.some((n) => n.resolver === "human"));
+export function needsHumanInput(s: Session) {
+  return s.state === "needs_human" || (s.state !== "done" && s.needs.some((n) => n.resolver === "human"));
+}
+
+export type Inspection = {
+  sessionId: string;
+  available: boolean;
+  diagnosis: string;
+  lastEventAt?: string | null;
+  lastEventType?: string | null;
+  silentSeconds?: number | null;
+  silent?: boolean;
+  pendingPermissions?: number;
+  failedPermissionPrompts?: number;
+  failedToolCalls?: number;
+  logBytes?: number;
+  typeCounts?: Record<string, number>;
+  recent?: { at: string; type: string; detail: string }[];
+};
+
+export async function fetchInspection(sessionId: string): Promise<Inspection> {
+  const response = await fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/inspect`);
+  if (!response.ok) throw new Error(`Inspect failed (${response.status})`);
+  return response.json();
+}
 
 export async function sendHumanReply(sessionId: string, message: string) {
   const response = await fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/reply`, {
