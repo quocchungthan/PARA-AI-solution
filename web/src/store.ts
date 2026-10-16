@@ -27,13 +27,25 @@ export const snapshot = signal<Snapshot | null>(null);
 export const selectedAgent = signal<string | null>(null);
 export const dark = signal(localStorage.getItem("bridge-theme") !== "light");
 export const clock = signal(new Date());
-export const query = signal("");
 export const openSession = signal<string | null>(null);
 export const pollCount = signal(0);
 
 export type Page = "overview" | "sessions" | "agents";
 export const PAGES: Page[] = ["overview", "sessions", "agents"];
 export const page = signal<Page>("overview");
+// Set when the URL path or #view=<page> is not a route this app knows; renders the 404 page.
+export const notFound = signal(false);
+const knownPath = () => /\/(index\.html)?$/.test(location.pathname);
+
+/** Leave the 404 page for a real page; an unknown path needs a reload at the app root. */
+export function openPage(p: Page) {
+  if (!knownPath()) {
+    location.assign(location.pathname.replace(/[^/]*$/, "") + (p === "overview" ? "" : "#view=" + p));
+    return;
+  }
+  notFound.value = false;
+  page.value = p;
+}
 // Session card outlined in blue after following a notification.
 export const highlighted = signal<string | null>(null);
 
@@ -46,7 +58,6 @@ export function goToSession(sessionId: string) {
   notices.value = notices.value.map((n) => (n.sessionId === sessionId ? { ...n, read: true } : n));
   toast.value = null;
   selectedAgent.value = null;
-  query.value = "";
   page.value = "sessions";
   highlighted.value = sessionId;
 }
@@ -109,10 +120,7 @@ export const agents = computed(() => {
   return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 });
 export const visibleSessions = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  return sessions.value.filter((s) =>
-    (!selectedAgent.value || agentOf(s) === selectedAgent.value) &&
-    (!q || [s.sessionId, s.title, s.task, agentOf(s), s.state].some((v) => v?.toLowerCase().includes(q))));
+  return sessions.value.filter((s) => !selectedAgent.value || agentOf(s) === selectedAgent.value);
 });
 export const counts = computed(() => {
   const c = { queue: 0, running: 0, attention: 0, done: 0 };
@@ -183,11 +191,13 @@ export function connect() {
     const params = new URLSearchParams(location.hash.slice(1));
     const view = params.get("view") as Page | null;
     page.value = view && PAGES.includes(view) ? view : "overview";
+    notFound.value = !knownPath() || (view !== null && !PAGES.includes(view));
     openSession.value = params.get("session");
   };
   fromHash();
   window.addEventListener("hashchange", fromHash);
   effect(() => {
+    if (notFound.value) return; // keep the bad URL visible on the 404 page
     const params = new URLSearchParams();
     if (page.value !== "overview") params.set("view", page.value);
     if (openSession.value) params.set("session", openSession.value);

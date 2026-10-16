@@ -1,12 +1,15 @@
 import { Suspense, lazy, memo, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Hexagon } from "@phosphor-icons/react";
-import { dark } from "./store";
+import { dark, notFound } from "./store";
 import ShinyText from "./reactbits/ShinyText/ShinyText";
 import MetallicPaint from "./reactbits/MetallicPaint/MetallicPaint";
 import ClickSpark from "./reactbits/ClickSpark/ClickSpark";
 import MagicRings from "./reactbits/MagicRings/MagicRings";
 import LatticeLoader, { type LatticeLoaderProps } from "./reactbits/LatticeLoader/LatticeLoader";
 import BorderGlow from "./reactbits/BorderGlow/BorderGlow";
+import LetterGlitch from "./reactbits/LetterGlitch/LetterGlitch";
+import Strands from "./reactbits/Strands/Strands";
+import FuzzyText from "./reactbits/FuzzyText/FuzzyText";
 
 // matter-js is only needed when the backend is unreachable, so load it on demand.
 const FallingText = lazy(() => import("./reactbits/FallingText/FallingText"));
@@ -50,14 +53,69 @@ export function OfflineTitle() {
   );
 }
 
+/** "404" in React Bits Fuzzy Text, cool monochrome (slate white/gray/black) without RGB split; fuzz swells on hover. */
+export function NotFoundTitle() {
+  const light = !dark.value;
+  return (
+    <div className="notFoundCode">
+      <FuzzyText fontSize="clamp(96px, 18vw, 180px)" fontWeight={900} color={light ? "#14181D" : "#F4F6F9"}
+        gradient={light ? ["#0F172A", "#334155", "#64748B"] : ["#F8FAFC", "#CBD5E1", "#64748B"]} baseIntensity={0.16} hoverIntensity={0.45} fuzzRange={24}
+        glitchMode glitchInterval={2600} glitchDuration={220} colorSplit={0}>404</FuzzyText>
+    </div>
+  );
+}
+
+/** Full-page Letter Glitch backdrop for the "bridge is not running" screen: gray glyphs with the offline red. */
+export function OfflineBackdrop() {
+  const light = !dark.value;
+  if (!hasWebGL2) return null;
+  return (
+    <div className="offlineBg" aria-hidden>
+      <LetterGlitch lightMode={light} backgroundColor={light ? "#F3F4F6" : "#09090B"}
+        baseColor={light ? "#6B7280" : "#9CA3AF"}
+        glitchColors={light ? ["#18181b", "#C93848"] : ["#F4F6F9", "#F07882"]}
+        baseOpacity={light ? 0.12 : 0.14} glitchAmount={0.45} speed={0.8} edgeFade={0.15} />
+    </div>
+  );
+}
+
+// Strands colour roles: warm sheet (edge, mid, highlight, core) then cool sheet (accent, mid, deep).
+const STATUS = {
+  online: { label: "Online", hint: "Bridge connected", speed: 1.5, energy: 1,
+    colors: ["#16A34A", "#22C55E", "#FACC15", "#ECFCCB", "#22D3EE", "#4ADE80", "#8B5CF6"] },
+  offline: { label: "Offline", hint: "Bridge service is not running", speed: 1.1, energy: 0.8,
+    colors: ["#DC2626", "#F43F5E", "#FB923C", "#FFE4E6", "#F472B6", "#EF4444", "#A855F7"] },
+  connecting: { label: "Connecting", hint: "Looking for the Bridge…", speed: 1.2, energy: 0.7,
+    colors: ["#3B82F6", "#60A5FA", "#A78BFA", "#F8FAFC", "#22D3EE", "#818CF8", "#6366F1"] },
+} as const;
+
+/** Header connection indicator: Strands in the status hue (green online / red offline) inside a themed orb, with a hover/focus hint. */
+export const StatusOrb = memo(function StatusOrb({ online }: { online: boolean | null }) {
+  const key = online ? "online" : online === false ? "offline" : "connecting";
+  const s = STATUS[key];
+  return (
+    <span className="statusOrb" data-state={key} role="status" tabIndex={0} aria-label={`${s.label}: ${s.hint}`}>
+      {hasWebGL2
+        ? <span className="orbCore">
+            <Strands colors={[...s.colors]} glass={false} count={3} speed={s.speed} energy={s.energy} listening
+              amplitude={1} waviness={1.6} spread={1} glow={1.4} intensity={1.15}
+              interactive={false} clickPulse={false} />
+          </span>
+        : <i className="dot" />}
+      <span className="statusHint" role="tooltip" aria-hidden><i className="dot" /><b>{s.label}</b>{s.hint}</span>
+    </span>
+  );
+});
+
 const SPLASH_MS = 4200;
 const SPLASH_FADE_MS = 700;
 
-/** Intro screen shown once per page load: logo + name centred over monochrome Magic Rings. */
+/** Intro screen shown once per page load (skipped when landing on a 404): logo + name over monochrome Magic Rings. */
 export function Splash() {
   const light = !dark.value;
-  const [phase, setPhase] = useState<"show" | "leave" | "gone">("show");
+  const [phase, setPhase] = useState<"show" | "leave" | "gone">(() => (notFound.peek() ? "gone" : "show"));
   useEffect(() => {
+    if (phase === "gone") return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const hold = reduced ? 900 : SPLASH_MS;
     const leave = setTimeout(() => setPhase("leave"), hold);
@@ -79,21 +137,29 @@ export function Splash() {
   );
 }
 
-/** App-wide loading indicator (React Bits Lattice Loader) in the PARA ice tone. */
+/** App-wide loading indicator (React Bits Lattice Loader) in the PARA ice tone; props override the defaults. */
 export function Loader(props: LatticeLoaderProps) {
   return <LatticeLoader pattern="orbit" shape="round" color="var(--ice)" glow showTimer={false} {...props} />;
 }
 
 const GLOW_COLORS = ["#c084fc", "#f472b6", "#38bdf8"];
 
+interface GlowCardProps {
+  children: ReactNode;
+  radius: number;
+  className?: string;
+  style?: CSSProperties;
+  /** Keep the glow sweeping without hover (e.g. while a session is working). */
+  active?: boolean;
+}
+
 /** Card hover effect: React Bits Border Glow (purple / pink / sky palette); the child provides the card content. */
-export function GlowCard({ children, className = "", radius, style, active = false }: { children: ReactNode; className?: string; radius: number; style?: CSSProperties; active?: boolean }) {
+export function GlowCard({ children, radius, className = "", style, active = false }: GlowCardProps) {
   const light = !dark.value;
   return (
     <BorderGlow className={`glowCard ${className}`} borderRadius={radius} glowRadius={28} edgeSensitivity={25} coneSpread={22}
       backgroundColor={light ? "#FFFFFF" : "#16171B"} glowColor={light ? "270 75 60" : "270 95 75"}
-      colors={GLOW_COLORS}
-      glowIntensity={light ? 0.9 : 1} fillOpacity={0.35} style={style} active={active}>
+      colors={GLOW_COLORS} glowIntensity={light ? 0.9 : 1} fillOpacity={0.35} style={style} active={active}>
       {children}
     </BorderGlow>
   );

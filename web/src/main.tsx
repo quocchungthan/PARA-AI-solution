@@ -11,7 +11,7 @@ class Boundary extends Component<{ children: ReactNode }, { error: Error | null 
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="offline">
+      <div className="offline crash">
         <h2>Something broke while rendering</h2>
         <pre>{String(this.state.error.stack ?? this.state.error)}</pre>
         <button className="more" onClick={() => location.reload()}>Reload</button>

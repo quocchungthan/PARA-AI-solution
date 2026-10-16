@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Kanban, Lightning, MagnifyingGlass, Moon, SquaresFour, Sun, UsersThree, X, type Icon } from "@phosphor-icons/react";
+import { Bell, Check, Copy, Kanban, Moon, SquaresFour, Sun, UsersThree, X, type Icon } from "@phosphor-icons/react";
 import {
-  API, clock, counts, dark, goToSession, markAllRead, notices, page, query, serviceOnline, snapshot,
+  API, clock, counts, dark, goToSession, markAllRead, notFound, notices, openPage, page, serviceOnline, snapshot,
   toast, toggleTheme, unread, type Page,
 } from "./store";
 import { AgentCards, Health, Kanban as WorkQueue, Logs, Throughput } from "./Panels";
 import { Network } from "./Network";
 import { Drawer } from "./Fx";
 import { AgentGlyph } from "./Glyph";
-import { BrandName, Loader, Logo, OfflineTitle, PageSpark, Splash } from "./Effects";
+import { BrandName, Loader, Logo, NotFoundTitle, OfflineBackdrop, OfflineTitle, PageSpark, Splash, StatusOrb } from "./Effects";
 import { ago } from "./util";
 
 const TABS: { key: Page; label: string; icon: Icon }[] = [
@@ -17,48 +17,51 @@ const TABS: { key: Page; label: string; icon: Icon }[] = [
   { key: "agents", label: "Agents", icon: UsersThree },
 ];
 
+const START_BRIDGE = [
+  "git clone https://github.com/quocchungthan/PARA-AI-solution",
+  "cd PARA-AI-solution",
+  "dotnet run --project src/Bridge",
+].join("\n");
+
 function Offline() {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(START_BRIDGE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  };
   return (
-    <div className="offline">
-      <div className="offlineIcon"><Lightning weight="fill" /></div>
-      <OfflineTitle />
-      <p>
-        This page only displays data. The Bridge runs on your machine (<code>{API}</code>) and reads
-        your <code>data/</code> folder. Install and start it, then this page reconnects automatically:
-      </p>
-      <pre>{`git clone https://github.com/quocchungthan/PARA-AI-solution
-cd PARA-AI-solution
-dotnet run --project src/Bridge`}</pre>
-      <p className="sub">
-        Started it and still offline? Your browser may have asked to allow this site to reach devices on your
-        local network: choose Allow (or enable it in the site settings for this page).
-      </p>
-      <div className="retry"><Loader label="Retrying every few seconds" pattern="ripple" fontSize={12} cellSize={5} /></div>
+    <div className="offlineStage">
+      <OfflineBackdrop />
+      <section className="offline">
+        <OfflineTitle />
+        <p className="offlineLead">Start it on your machine. This page reconnects on its own.</p>
+        <div className="offlineTerm">
+          <div className="offlineTermBar">
+            <span>Terminal</span>
+            <button onClick={copy} aria-label="Copy commands">
+              {copied ? <Check weight="bold" /> : <Copy />}{copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <pre>{START_BRIDGE}</pre>
+        </div>
+        <footer className="offlineFoot">
+          <Loader label={`Retrying ${API.replace(/^https?:\/\//, "")}`} pattern="ripple" fontSize={12} cellSize={4} />
+          <span>Still offline? Allow local network access for this site.</span>
+        </footer>
+      </section>
     </div>
   );
 }
-
-function Search() {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
-      if (e.key === "/" && !typing) { e.preventDefault(); ref.current?.focus(); }
-      if (e.key === "Escape" && document.activeElement === ref.current) { query.value = ""; ref.current?.blur(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+function NotFound() {
+  const where = decodeURIComponent(location.pathname + location.hash);
   return (
-    <label className="search">
-      <MagnifyingGlass />
-      <input ref={ref} value={query.value} aria-label="Search sessions" placeholder="Search sessions…"
-        onChange={(e) => {
-          query.value = e.target.value;
-          if (e.target.value && page.value === "overview") page.value = "sessions";
-        }} />
-      {query.value ? <button onClick={() => (query.value = "")} aria-label="Clear search"><X /></button> : <kbd>/</kbd>}
-    </label>
+    <section className="notFound">
+      <NotFoundTitle />
+      <h2>Page not found</h2>
+      <p>Nothing lives at <code>{where}</code>.</p>
+    </section>
   );
 }
 
@@ -132,9 +135,7 @@ export function App() {
   const isDark = dark.value;
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
   const time = clock.value.toLocaleTimeString("en-GB");
-  const log = snapshot.value?.log ?? [];
-  const lastPass = [...log].reverse().find((l) => l.includes("pass #"))?.match(/pass #\d+/)?.[0];
-  const current = page.value;
+  const current = notFound.value ? null : page.value;
 
   return (
     <PageSpark>
@@ -148,19 +149,15 @@ export function App() {
             const TabIcon = t.icon;
             return (
               <button key={t.key} className={current === t.key ? "on" : ""} aria-current={current === t.key ? "page" : undefined}
-                onClick={() => (page.value = t.key)}>
+                onClick={() => openPage(t.key)}>
                 <TabIcon weight="duotone" />{t.label}
                 {t.key === "sessions" && c.attention > 0 && <span className="tabBadge" title="Sessions that need you">{c.attention}</span>}
               </button>
             );
           })}
         </nav>
-        <span className={`pill ${online ? "up" : online === false ? "down" : ""}`}>
-          <i className="dot" /> {online === null ? "Connecting…" : online ? "Online" : "Offline"}
-        </span>
-        {online && lastPass && <span className="pill scan">Scan {lastPass}</span>}
+        <StatusOrb online={online} />
         <div className="spacer" />
-        {online && <Search />}
         <span className="clock">{time}</span>
         <Notifications />
         <button className="icon" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
@@ -168,9 +165,10 @@ export function App() {
         </button>
       </header>
       <main>
-        {online === null && <Connecting />}
-        {online === false && <Offline />}
-        {online && snapshot.value && (
+        {notFound.value && <NotFound />}
+        {!notFound.value && online === null && <Connecting />}
+        {!notFound.value && online === false && <Offline />}
+        {!notFound.value && online && snapshot.value && (
           <div key={current} className="page">
             {current === "overview" && (
               <div className="overview">

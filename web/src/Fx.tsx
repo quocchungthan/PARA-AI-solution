@@ -28,7 +28,7 @@ function InspectorPanel({ sessionId }: { sessionId: string }) {
       {error && <div className="callout bad"><p>{error}</p></div>}
       {!info && !error && <p className="taskText">Reading event log…</p>}
       {info && (
-        <>
+        <div className="inspector">
           <div className={`callout ${stuck ? "bad" : info.available ? "ok" : ""}`}><p>{info.diagnosis}</p></div>
           {info.available && (
             <>
@@ -49,7 +49,7 @@ function InspectorPanel({ sessionId }: { sessionId: string }) {
               </ol>
             </>
           )}
-        </>
+        </div>
       )}
     </>
   );

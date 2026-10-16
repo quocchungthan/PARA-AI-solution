@@ -26,6 +26,8 @@ function Card({ s, i }: { s: Session; i: number }) {
   const details = [note, ...(s.issues ?? [])].filter(Boolean).join(" · ");
   const action = actionOf(s);
   const lit = highlighted.value === s.sessionId;
+  const hasIssues = (s.issues?.length ?? 0) > 0;
+  const flagged = s.stale || hasIssues;
   useEffect(() => {
     if (lit) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [lit]);
@@ -35,30 +37,30 @@ function Card({ s, i }: { s: Session; i: number }) {
   };
   return (
     <GlowCard radius={14} className="taskGlow" style={{ animationDelay: `${i * 35}ms` }} active={s.state === "working" && !s.stale}>
-    <div ref={ref} className={`task ${s.state} ${s.stale || (s.issues?.length ?? 0) > 0 ? "stale" : ""} ${isFresh(s.sessionId) ? "flash" : ""} ${lit ? "highlight" : ""}`}
-      onClick={open} role="button" tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && open()}>
-      <div className="taskTop">
-        <span className="id">{s.sessionId.slice(0, 8)}</span>
-        {lit && <span className="newTag">new</span>}
-        <span className="state" style={{ color: s.stale || (s.issues?.length ?? 0) > 0 ? "var(--warn)" : STATE_COLOR[s.state] }}>
-          {s.stale || (s.issues?.length ?? 0) > 0
-            ? <Warning weight="fill" />
-            : s.state === "working" && <i className="dot" />} {s.stale ? "Stale" : (s.issues?.length ?? 0) > 0 ? "Protocol issue" : stateLabel(s)}
-        </span>
+      <div ref={ref} className={`task ${s.state} ${flagged ? "stale" : ""} ${isFresh(s.sessionId) ? "flash" : ""} ${lit ? "highlight" : ""}`}
+        onClick={open} role="button" tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && open()}>
+        <div className="taskTop">
+          <span className="id">{s.sessionId.slice(0, 8)}</span>
+          {lit && <span className="newTag">new</span>}
+          <span className="state" style={{ color: flagged ? "var(--warn)" : STATE_COLOR[s.state] }}>
+            {flagged
+              ? <Warning weight="fill" />
+              : s.state === "working" && <i className="dot" />} {s.stale ? "Stale" : hasIssues ? "Protocol issue" : stateLabel(s)}
+          </span>
+        </div>
+        <div className="taskTitle">{titleOf(s)}</div>
+        {details && <div className="taskNote">{details}</div>}
+        <div className="taskFoot">
+          <AgentGlyph name={name} size="sm" />
+          <span>{name}</span>
+          <span className="when">{ago(s.updatedAt, clock.value.getTime())}</span>
+        </div>
+        {action && (
+          <button className="actionBtn" onClick={(e) => { e.stopPropagation(); open(); }}
+            title="Open the session to see what it needs">{action}</button>
+        )}
       </div>
-      <div className="taskTitle">{titleOf(s)}</div>
-      {details && <div className="taskNote">{details}</div>}
-      <div className="taskFoot">
-        <AgentGlyph name={name} size="sm" />
-        <span>{name}</span>
-        <span className="when">{ago(s.updatedAt, clock.value.getTime())}</span>
-      </div>
-      {action && (
-        <button className="actionBtn" onClick={(e) => { e.stopPropagation(); open(); }}
-          title="Open the session to see what it needs">{action}</button>
-      )}
-    </div>
     </GlowCard>
   );
 }
@@ -192,23 +194,23 @@ export function AgentCards() {
           const latest = items.flatMap((s) => s.progress).sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? ""))[0]?.note;
           return (
             <GlowCard key={name} radius={22} className="agentGlow" style={{ animationDelay: `${idx * 45}ms` }} active={running > 0}>
-            <button className={`agent ${running ? "busy" : ""}`}
-              onClick={() => { selectedAgent.value = name; page.value = "sessions"; }}>
-              <div className="agentHead">
-                <AgentGlyph name={name} size="lg" />
-                <div><strong>{name}</strong><small>{roleOf(name)} · {plural(items.length, "session")}</small></div>
-                {running > 0
-                  ? <span className="statusTag run"><i className="dot" />{running} running</span>
-                  : <span className="statusTag">idle</span>}
-              </div>
-              <div className="stats">
-                <div><small>Done</small><b><AnimatedNumber value={done} /></b></div>
-                <div><small>Running</small><b><AnimatedNumber value={running} /></b></div>
-                <div><small>Needs you</small><b className={attention ? "warn" : ""}><AnimatedNumber value={attention} /></b></div>
-              </div>
-              <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-              <div className="term"><span className="prompt">›</span> {latest ?? "Idle"}{running > 0 && <span className="caret">▌</span>}</div>
-            </button>
+              <button className={`agent ${running ? "busy" : ""}`}
+                onClick={() => { selectedAgent.value = name; page.value = "sessions"; }}>
+                <div className="agentHead">
+                  <AgentGlyph name={name} size="lg" />
+                  <div><strong>{name}</strong><small>{roleOf(name)} · {plural(items.length, "session")}</small></div>
+                  {running > 0
+                    ? <span className="statusTag run"><i className="dot" />{running} running</span>
+                    : <span className="statusTag">idle</span>}
+                </div>
+                <div className="stats">
+                  <div><small>Done</small><b><AnimatedNumber value={done} /></b></div>
+                  <div><small>Running</small><b><AnimatedNumber value={running} /></b></div>
+                  <div><small>Needs you</small><b className={attention ? "warn" : ""}><AnimatedNumber value={attention} /></b></div>
+                </div>
+                <div className="bar"><i style={{ width: `${pct}%` }} /></div>
+                <div className="term"><span className="prompt">›</span> {latest ?? "Idle"}{running > 0 && <span className="caret">▌</span>}</div>
+              </button>
             </GlowCard>
           );
         })}
@@ -228,6 +230,7 @@ const matches = (lv: string, want: Level) => (want === "ALL" ? lv !== "DEBUG" : 
 
 export function Logs() {
   const lines = snapshot.value?.log ?? [];
+  const lastPass = [...lines].reverse().find((l) => l.includes("pass #"))?.match(/pass #\d+/)?.[0];
   const ref = useRef<HTMLDivElement>(null);
   const seen = new Map<string, number>();
   let prev = "";
@@ -250,7 +253,7 @@ export function Logs() {
       <div className="consoleBar">
         <span className="tl" aria-hidden><i /><i /><i /></span>
         <h2 id="logs-title">Logs</h2>
-        <span className="path">bridge.log · {lines.length} lines</span>
+        <span className="path">{lastPass ? `Scan ${lastPass}` : `${lines.length} lines`}</span>
         <button className={`chip toggle ${follow.value ? "on" : ""}`} onClick={() => (follow.value = !follow.value)}
           title="Auto-scroll to newest" aria-pressed={follow.value}>
           <ArrowsClockwise /> {follow.value ? "following" : "paused"}
