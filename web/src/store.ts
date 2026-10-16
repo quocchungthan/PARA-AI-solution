@@ -12,6 +12,7 @@ export type Session = {
   handoff?: { id: string; target: string; agent?: string; prompt: string } | null;
   updatedAt?: string;
   stale?: boolean;
+  registered?: boolean;
   silent?: boolean;
   lastActivityAt?: string | null;
   issues?: string[];

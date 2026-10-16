@@ -10,10 +10,12 @@ public static class Api
     static readonly JsonSerializerOptions Compact = new(Json.Options) { WriteIndented = false };
 
     static string _agentsDir = "";
+    static string _repoRoot = "";
 
-    public static Task Start(string dataDir, CancellationToken ct, string agentsDir = "")
+    public static Task Start(string dataDir, CancellationToken ct, string agentsDir = "", string repoRoot = "")
     {
         _agentsDir = agentsDir;
+        _repoRoot = repoRoot;
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls($"http://localhost:{Port}");
@@ -100,11 +102,7 @@ public static class Api
 
     static object Snapshot(string dataDir)
     {
-        var sessions = new List<SessionFile>();
-        var sessionsDir = Path.Combine(dataDir, "sessions");
-        if (Directory.Exists(sessionsDir))
-            foreach (var f in Directory.GetFiles(sessionsDir, "*.json"))
-                if (Json.Read<SessionFile>(f) is { } s) sessions.Add(s);
+        var sessions = SessionStore.LoadAll(dataDir, _repoRoot);
 
         var bridgeDir = Path.Combine(dataDir, "bridge");
         var statePath = Path.Combine(bridgeDir, "state.json");
@@ -131,6 +129,7 @@ public static class Api
                 s.Result,
                 s.Handoff,
                 s.UpdatedAt,
+                registered = !s.Discovered,
                 stale = SessionHealth.IsStale(s),
                 issues = SessionHealth.Issues(s),
                 lastActivityAt = Inspector.LastActivity(s.SessionId),

@@ -61,16 +61,12 @@ public class Scanner
         Log.Info(C, $"pass #{pass} start");
 
         var state = File.Exists(_statePath) ? Json.Read<BridgeState>(_statePath) ?? new() : new BridgeState();
-        var files = Directory.GetFiles(_sessions, "*.json");
-        Log.Debug(C, $"found {files.Length} session file(s) in {_sessions}");
-        var sessions = new List<SessionFile>();
-        foreach (var f in files)
+        var sessions = SessionStore.LoadAll(Path.GetDirectoryName(_sessions)!, _root);
+        Log.Debug(C, $"found {sessions.Count} session(s) ({sessions.Count(s => s.Discovered)} discovered without a session file) in {_sessions}");
+        foreach (var s in sessions)
         {
-            var s = Json.Read<SessionFile>(f);
-            if (s is null || s.SessionId.Length == 0) { Log.Warn(C, $"skipping {Path.GetFileName(f)}: unreadable or missing sessionId"); continue; }
-            sessions.Add(s);
             if (s.State == "done") continue;
-            Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
+            Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State}{(s.Discovered ? " UNREGISTERED" : "")} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
         }
 
         // Without an available agent runtime nothing can be delegated or delivered; keep surfacing the human queue.

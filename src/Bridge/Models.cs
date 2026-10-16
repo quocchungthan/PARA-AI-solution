@@ -33,6 +33,8 @@ public class SessionFile
     public string? Result { get; set; }                // final output the bridge can feed back to a requester
     public Handoff? Handoff { get; set; }
     public string? UpdatedAt { get; set; }
+    // True when the Bridge found this session in Copilot's session-state instead of a data/sessions file.
+    [JsonIgnore] public bool Discovered { get; set; }
 }
 
 public static class SessionHealth
@@ -63,6 +65,11 @@ public static class SessionHealth
     public static List<string> Issues(SessionFile session)
     {
         var issues = new List<string>();
+        if (session.Discovered)
+        {
+            issues.Add("not registered: no data/sessions file (agent did not follow para-session-protocol)");
+            return issues;
+        }
         if (string.IsNullOrWhiteSpace(session.State) || !KnownStates.Contains(session.State))
         {
             issues.Add($"unknown state '{session.State}'");
