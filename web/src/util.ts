@@ -27,7 +27,8 @@ export const STATE_COLOR: Record<string, string> = {
   waiting_input: "var(--warn)", pending: "var(--muted)",
 };
 
-export const stateLabel = (s: Session) => s.state.replace("_", " ");
+export const stateLabel = (s: Session) =>
+  s.registered === false && s.state === "done" ? "unregistered" : s.state.replace("_", " ");
 
 const ROLES: Record<string, string> = {
   coordinator: "orchestrator", coder: "implementation", researcher: "investigation",

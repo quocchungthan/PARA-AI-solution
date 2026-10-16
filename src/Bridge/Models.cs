@@ -67,7 +67,9 @@ public static class SessionHealth
         var issues = new List<string>();
         if (session.Discovered)
         {
-            issues.Add("not registered: no data/sessions file (agent did not follow para-session-protocol)");
+            // Only a live session can still follow the protocol; an idle one is just history.
+            if (session.State == "working")
+                issues.Add("not registered: no data/sessions file (agent did not follow para-session-protocol)");
             return issues;
         }
         if (string.IsNullOrWhiteSpace(session.State) || !KnownStates.Contains(session.State))

@@ -51,6 +51,8 @@ public static class SessionStore
                 if (cwd is null || !IsInside(Normalize(cwd), root)) continue;
 
                 var live = IsLive(dir);
+                // A session that never produced an event log has nothing to show.
+                if (!live && !File.Exists(Path.Combine(dir, "events.jsonl"))) continue;
                 var activity = Inspector.LastActivity(id) ?? Stamp(meta.GetValueOrDefault("updated_at")) ?? Stamp(meta.GetValueOrDefault("created_at"));
                 if (!live && (activity is null || now - activity > RecentWindow)) continue;
 
@@ -59,8 +61,8 @@ public static class SessionStore
                 {
                     SessionId = id,
                     Agent = "unknown",
-                    Title = string.IsNullOrWhiteSpace(name) ? "(unregistered session)" : name,
-                    Task = "Discovered from Copilot session-state; the agent never wrote data/sessions/" + id + ".json.",
+                    Title = string.IsNullOrWhiteSpace(name) ? "Unnamed session " + id[..8] : name,
+                    Task = "Unregistered Copilot session (no data/sessions file).",
                     State = live ? "working" : "done",
                     UpdatedAt = activity?.ToString("o"),
                     Discovered = true,
