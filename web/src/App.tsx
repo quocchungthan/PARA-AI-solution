@@ -8,7 +8,7 @@ import { AgentCards, Health, Kanban as WorkQueue, Logs, Throughput } from "./Pan
 import { Network } from "./Network";
 import { Drawer } from "./Fx";
 import { AgentGlyph } from "./Glyph";
-import { BrandName, Logo, OfflineTitle, SessionSpark } from "./Effects";
+import { BrandName, Loader, Logo, OfflineTitle, PageSpark, Splash } from "./Effects";
 import { ago } from "./util";
 
 const TABS: { key: Page; label: string; icon: Icon }[] = [
@@ -33,7 +33,7 @@ dotnet run --project src/Bridge`}</pre>
         Started it and still offline? Your browser may have asked to allow this site to reach devices on your
         local network: choose Allow (or enable it in the site settings for this page).
       </p>
-      <div className="retry"><span className="spinner" /> retrying every few seconds…</div>
+      <div className="retry"><Loader label="Retrying every few seconds" pattern="ripple" fontSize={12} cellSize={5} /></div>
     </div>
   );
 }
@@ -122,8 +122,8 @@ function Toast() {
   );
 }
 
-function Skeleton() {
-  return <div className="overview"><div className="panel skel" /><div className="panel skel" /></div>;
+function Connecting() {
+  return <div className="loadingScreen"><Loader label="Connecting to the Bridge" grid={4} pattern="sweep" cellSize={8} gap={3} fontSize={14} /></div>;
 }
 
 export function App() {
@@ -137,7 +137,7 @@ export function App() {
   const current = page.value;
 
   return (
-    <>
+    <PageSpark>
       <header>
         <div className="brand">
           <Logo light={!isDark} />
@@ -168,7 +168,7 @@ export function App() {
         </button>
       </header>
       <main>
-        {online === null && <Skeleton />}
+        {online === null && <Connecting />}
         {online === false && <Offline />}
         {online && snapshot.value && (
           <div key={current} className="page">
@@ -179,10 +179,10 @@ export function App() {
               </div>
             )}
             {current === "sessions" && (
-              <SessionSpark>
+              <>
                 <WorkQueue />
                 <div className="charts"><Throughput /><Health /></div>
-              </SessionSpark>
+              </>
             )}
             {current === "agents" && <AgentCards />}
           </div>
@@ -190,6 +190,7 @@ export function App() {
       </main>
       <Toast />
       <Drawer />
-    </>
+      <Splash />
+    </PageSpark>
   );
 }

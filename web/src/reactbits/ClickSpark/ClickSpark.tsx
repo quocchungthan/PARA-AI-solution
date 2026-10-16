@@ -26,6 +26,8 @@ export interface ClickSparkProps {
   disabled?: boolean;
   /** PARA: only spark when the click target matches this CSS selector (e.g. buttons). */
   selector?: string;
+  /** PARA: explicit z-index for the spark layer (overrides `layer`). */
+  layerZIndex?: number;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
@@ -157,6 +159,7 @@ const ClickSpark = forwardRef<ClickSparkHandle, ClickSparkProps>(
       layer = 'front',
       disabled = false,
       selector,
+      layerZIndex,
       className = '',
       style,
       children
@@ -490,7 +493,7 @@ const ClickSpark = forwardRef<ClickSparkHandle, ClickSparkProps>(
           style={{
             position: 'absolute',
             inset: 0,
-            zIndex: layer === 'back' ? -1 : 1,
+            zIndex: layerZIndex ?? (layer === 'back' ? -1 : 1),
             overflow: 'visible',
             pointerEvents: 'none'
           }}

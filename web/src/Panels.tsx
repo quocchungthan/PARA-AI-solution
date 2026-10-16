@@ -8,6 +8,7 @@ import {
 import { STATE_COLOR, actionOf, ago, plural, roleOf, stateLabel, titleOf } from "./util";
 import { AnimatedNumber, isFresh } from "./Fx";
 import { AgentGlyph } from "./Glyph";
+import { GlowCard } from "./Effects";
 
 const COLS: { key: Column; label: string; icon: Icon }[] = [
   { key: "queue", label: "Queue", icon: ListDashes },
@@ -33,8 +34,9 @@ function Card({ s, i }: { s: Session; i: number }) {
     openSession.value = s.sessionId;
   };
   return (
+    <GlowCard radius={14} className="taskGlow" style={{ animationDelay: `${i * 35}ms` }} active={s.state === "working" && !s.stale}>
     <div ref={ref} className={`task ${s.state} ${s.stale || (s.issues?.length ?? 0) > 0 ? "stale" : ""} ${isFresh(s.sessionId) ? "flash" : ""} ${lit ? "highlight" : ""}`}
-      style={{ animationDelay: `${i * 35}ms` }} onClick={open} role="button" tabIndex={0}
+      onClick={open} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && open()}>
       <div className="taskTop">
         <span className="id">{s.sessionId.slice(0, 8)}</span>
@@ -57,6 +59,7 @@ function Card({ s, i }: { s: Session; i: number }) {
           title="Open the session to see what it needs">{action}</button>
       )}
     </div>
+    </GlowCard>
   );
 }
 
@@ -188,7 +191,8 @@ export function AgentCards() {
           const pct = items.length ? Math.round((done / items.length) * 100) : 0;
           const latest = items.flatMap((s) => s.progress).sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? ""))[0]?.note;
           return (
-            <button key={name} className={`agent ${running ? "busy" : ""}`} style={{ animationDelay: `${idx * 45}ms` }}
+            <GlowCard key={name} radius={22} className="agentGlow" style={{ animationDelay: `${idx * 45}ms` }} active={running > 0}>
+            <button className={`agent ${running ? "busy" : ""}`}
               onClick={() => { selectedAgent.value = name; page.value = "sessions"; }}>
               <div className="agentHead">
                 <AgentGlyph name={name} size="lg" />
@@ -205,6 +209,7 @@ export function AgentCards() {
               <div className="bar"><i style={{ width: `${pct}%` }} /></div>
               <div className="term"><span className="prompt">›</span> {latest ?? "Idle"}{running > 0 && <span className="caret">▌</span>}</div>
             </button>
+            </GlowCard>
           );
         })}
       </div>
