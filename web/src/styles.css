@@ -319,7 +319,16 @@ main { max-width:1640px; margin:0 auto; padding:22px 28px 40px; }
 .replyFeedback.success { color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, transparent); }
 
 /* ---------- offline ---------- */
-.offlineStage { position:relative; min-height:calc(100dvh - 150px); display:grid; grid-template-columns:minmax(0,1fr); place-items:center; }
+.offlineStage { position:relative; min-height:calc(100dvh - 150px); display:grid; grid-template-columns:minmax(0,1fr); place-items:center; gap:40px; padding:40px 0; }
+.competitors { position:relative; z-index:1; width:min(1120px, 100%); }
+.competitors > h2 { font-size:20px; }
+.competitorList { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap:14px; margin:0; padding:0; list-style:none; }
+.competitorCard { min-width:0; padding:20px; border-radius:18px; border:1px solid var(--border); background:var(--surface); }
+.competitorCard h3 { font-size:13.5px; overflow-wrap:anywhere; }
+.competitorCard a { color:var(--accent); text-decoration-thickness:1px; text-underline-offset:3px; }
+.competitorCard a:hover { color:var(--text); }
+.competitorCard a:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:2px; }
+.competitorCard p { margin:10px 0 0; color:var(--muted); overflow-wrap:anywhere; }
 .offlineBg { position:fixed; inset:0; z-index:0; animation:fadeIn .8s both; }
 /* Edge vignette only: the glyph field must stay visible behind the card so the glass has something to refract. */
 .offlineBg::after { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse 85% 85% at 50% 50%, transparent 55%, var(--bg) 100%); }

@@ -10,6 +10,7 @@ import { Drawer } from "./Fx";
 import { AgentGlyph } from "./Glyph";
 import { BrandName, Loader, Logo, NotFoundTitle, OfflineBackdrop, OfflineTitle, PageSpark, Splash, StatusOrb } from "./Effects";
 import { ago } from "./util";
+import { Competitors } from "./Competitors";
 
 const TABS: { key: Page; label: string; icon: Icon }[] = [
   { key: "overview", label: "Overview", icon: SquaresFour },
@@ -51,6 +52,7 @@ function Offline() {
           <span>Still offline? Allow local network access for this site.</span>
         </footer>
       </section>
+      <Competitors />
     </div>
   );
 }

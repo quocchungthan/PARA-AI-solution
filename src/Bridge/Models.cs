@@ -80,7 +80,7 @@ public static class SessionHealth
 
         if (session.State == "done" && string.IsNullOrWhiteSpace(session.Result))
             issues.Add("done state has no result");
-        if (session.State == "waiting_input" && string.IsNullOrWhiteSpace(session.Question))
+        if (session.State == "waiting_input" && string.IsNullOrWhiteSpace(session.Question) && session.Handoff is null)
             issues.Add("waiting_input state has no question");
         if (session.State == "blocked" && session.Needs.Count == 0)
             issues.Add("blocked state has no needs");
