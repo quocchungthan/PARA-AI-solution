@@ -16,7 +16,7 @@ export type Session = {
 };
 export type Delegation = { key: string; originId: string; targetId: string; status: string; createdAt?: string };
 export type Snapshot = {
-  now: string; sessions: Session[]; delegations: Delegation[]; humanQueue: unknown; log: string[];
+  now: string; roles?: string[]; sessions: Session[]; delegations: Delegation[]; humanQueue: unknown; log: string[];
 };
 
 export const serviceOnline = signal<boolean | null>(null);
@@ -78,6 +78,8 @@ export const sessions = computed(() => snapshot.value?.sessions ?? []);
 export const agents = computed(() => {
   const map = new Map<string, Session[]>();
   for (const s of sessions.value) map.set(agentOf(s), [...(map.get(agentOf(s)) ?? []), s]);
+  // Defined roles with no sessions yet still appear (with zero sessions).
+  for (const r of snapshot.value?.roles ?? []) if (!map.has(r)) map.set(r, []);
   return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 });
 export const visibleSessions = computed(() => {

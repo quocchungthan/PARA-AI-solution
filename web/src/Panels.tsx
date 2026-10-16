@@ -185,7 +185,7 @@ export function AgentCards() {
           const done = items.filter((s) => s.state === "done").length;
           const running = items.filter((s) => s.state === "working").length;
           const attention = items.filter((s) => columnOf(s) === "attention").length;
-          const pct = Math.round((done / items.length) * 100);
+          const pct = items.length ? Math.round((done / items.length) * 100) : 0;
           const latest = items.flatMap((s) => s.progress).sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? ""))[0]?.note;
           return (
             <button key={name} className={`agent ${running ? "busy" : ""}`} style={{ animationDelay: `${idx * 45}ms` }}
