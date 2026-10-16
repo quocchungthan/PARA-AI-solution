@@ -1,9 +1,59 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { agentOf, changedAt, clock, needsHumanInput, openSession, sendHumanReply, sessions } from "./store";
+import { agentOf, changedAt, clock, fetchInspection, needsHumanInput, openSession, sendHumanReply, sessions, type Inspection } from "./store";
 import { STATE_COLOR, ago, roleOf, stateLabel } from "./util";
 import { AgentGlyph } from "./Glyph";
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Live look into the session's own Copilot event log, refreshed while the drawer is open.
+function InspectorPanel({ sessionId }: { sessionId: string }) {
+  const [info, setInfo] = useState<Inspection | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setInfo(null);
+    setError(null);
+    const load = () => fetchInspection(sessionId)
+      .then((r) => alive && (setInfo(r), setError(null)))
+      .catch((e) => alive && setError(e instanceof Error ? e.message : "Inspect failed"));
+    void load();
+    const timer = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [sessionId]);
+  const now = clock.value.getTime();
+  const stuck = info?.available && (info.silent || /^Stuck/.test(info.diagnosis));
+  return (
+    <>
+      <h4>Inspector</h4>
+      {error && <div className="callout bad"><p>{error}</p></div>}
+      {!info && !error && <p className="taskText">Reading event log…</p>}
+      {info && (
+        <>
+          <div className={`callout ${stuck ? "bad" : info.available ? "ok" : ""}`}><p>{info.diagnosis}</p></div>
+          {info.available && (
+            <>
+              <div className="meta">
+                <span className="chip">last event {info.lastEventAt ? ago(info.lastEventAt, now) : "unknown"}</span>
+                {info.lastEventType && <span className="chip">{info.lastEventType}</span>}
+                {!!info.pendingPermissions && <span className="chip">{info.pendingPermissions} pending permission</span>}
+                {!!info.failedPermissionPrompts && <span className="chip">{info.failedPermissionPrompts} failed prompts</span>}
+                {!!info.failedToolCalls && <span className="chip">{info.failedToolCalls} failed tools</span>}
+              </div>
+              <ol className="timeline">
+                {[...(info.recent ?? [])].reverse().slice(0, 15).map((e, i) => (
+                  <li key={i}>
+                    <span className="when">{ago(e.at, now)}</span>
+                    <span><b>{e.type}</b>{e.detail ? ` · ${e.detail}` : ""}</span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
 
 // Tweens from the previous value to the new one so KPI changes are visible.
 export function AnimatedNumber({ value }: { value: number }) {
@@ -124,6 +174,7 @@ export function Drawer() {
                 </form>
               </>
             )}
+            <InspectorPanel sessionId={s.sessionId} />
             <h4>Progress</h4>
             <ol className="timeline">
               {[...s.progress].reverse().map((p, i) => (

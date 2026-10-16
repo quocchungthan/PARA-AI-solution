@@ -33,6 +33,14 @@ public static class Api
 
         app.MapGet("/api/health", () => new { ok = true, tool = "para-bridge" });
         app.MapGet("/api/snapshot", () => Snapshot(dataDir));
+        app.MapGet("/api/sessions/{sessionId}/inspect", (string sessionId) =>
+        {
+            if (!Guid.TryParse(sessionId, out var g)) return Results.BadRequest(new { error = "Invalid session id." });
+            var id = g.ToString("D");
+            var path = Path.Combine(dataDir, "sessions", id + ".json");
+            var state = File.Exists(path) ? Json.Read<SessionFile>(path)?.State ?? "" : "";
+            return Results.Ok(Inspector.Inspect(id, state));
+        });
         app.MapPost("/api/sessions/{sessionId}/reply", (string sessionId, SessionReplyRequest? request) =>
             QueueHumanReply(dataDir, sessionId, request));
         app.MapGet("/api/stream", async (HttpContext ctx) =>
@@ -125,6 +133,8 @@ public static class Api
                 s.UpdatedAt,
                 stale = SessionHealth.IsStale(s),
                 issues = SessionHealth.Issues(s),
+                lastActivityAt = Inspector.LastActivity(s.SessionId),
+                silent = Inspector.IsSilent(s.State, Inspector.LastActivity(s.SessionId), DateTimeOffset.UtcNow),
             }),
             delegations = (File.Exists(statePath) ? Json.Read<BridgeState>(statePath)?.Delegations : null) ?? new(),
             humanQueue = File.Exists(queuePath) ? Json.Read<JsonElement>(queuePath) : default,
