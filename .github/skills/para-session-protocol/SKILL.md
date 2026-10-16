@@ -44,10 +44,11 @@ When Chung answers through the CLI/chat or the Bridge inbox, treat either as hum
 
 ## When to write
 1. On receiving a task: create the file (state `working`).
-2. After each meaningful step: append to `progress`, refresh `updatedAt`.
+2. At milestones only (state change, handoff, blocker/question, result, or a notable decision/finding): append one short line to `progress` and refresh `updatedAt`. Do not log routine steps; `progress` is read on demand by humans and the scrum-master, never needed to restore your own context.
 3. Before asking anything or ending a turn: set `state`/`question`/`needs`.
 4. On completion: `state: done` and `result`.
-Read-modify-write the whole file; keep it valid JSON.
+5. On every new user request or follow-up in a session that is `done` (or otherwise not `working`): FIRST set `state: working`, refresh `task`/`title` if the focus changed, clear `result`, and keep logging `progress`. When the follow-up turn ends, set `state` and `result` again so they describe all the work so far. The bridge stops scanning `done` sessions, so work done under a stale `done` state is invisible to it.
+Read-modify-write the whole file; keep it valid JSON. Use only the fields in the schema above.
 
 ## Handoff / delegation
 To delegate part of the work, set `handoff` (set `state` to `waiting_input` unless you can continue meanwhile):

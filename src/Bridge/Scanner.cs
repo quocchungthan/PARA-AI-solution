@@ -66,6 +66,7 @@ public class Scanner
             var s = Json.Read<SessionFile>(f);
             if (s is null || s.SessionId.Length == 0) { Log.Warn(C, $"skipping {Path.GetFileName(f)}: unreadable or missing sessionId"); continue; }
             sessions.Add(s);
+            if (s.State == "done") continue;
             Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
         }
 
@@ -124,8 +125,8 @@ public class Scanner
                     });
                     Attach(session, d.TargetId);
                     prompt += $"\nYour session id is {d.TargetId}.";
-                    var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, TimeSpan.FromMinutes(30));
-                    Log.Info("handoff", $"{key} new session {d.TargetId} turn finished, reply=\"{Log.Short((reply?.Data as AssistantMessageData)?.Content)}\"");
+                    // Fire and forget: the result comes back through the target's session file (step 2), not this turn.
+                    StartBackgroundTurn(session, d.TargetId, key, prompt);
                 }
                 else
                 {
@@ -148,6 +149,7 @@ public class Scanner
             var target = File.Exists(path) ? Json.Read<SessionFile>(path) : null;
             if (target is null) { Log.Debug("result", $"{d.Key}: target {d.TargetId} has no session file yet (agent has not registered)"); continue; }
             if (target.State is not ("done" or "waiting_input" or "blocked" or "needs_human")) { Log.Debug("result", $"{d.Key}: target {d.TargetId} state={target.State}, still running"); continue; }
+            if (_busy.ContainsKey(d.OriginId)) { Log.Debug("result", $"{d.Key}: origin {d.OriginId} is mid-turn, will feed next pass"); continue; }
             var msg = $"Result of delegation to session {d.TargetId} (state: {target.State}).\nResult: {target.Result}\nQuestion: {target.Question}\nNeeds: {string.Join("; ", target.Needs.Select(n => $"[{n.Resolver}] {n.Text}"))}";
             Log.Info("result", $"{d.Key}: target {d.TargetId} state={target.State}; feeding back to origin {d.OriginId}");
             try { await FeedAsync(d.OriginId, msg); d.Status = "result_fed"; Log.Info("result", $"{d.Key} result_fed"); }
@@ -255,6 +257,23 @@ public class Scanner
         }
         catch (Exception e) { Log.Error("daily", "scrum master run failed or timed out", e); }
         return true;
+    }
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _busy = new();
+
+    void StartBackgroundTurn(CopilotSession session, string id, string key, string prompt)
+    {
+        _busy[id] = 0;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, TimeSpan.FromMinutes(30));
+                Log.Info("handoff", $"{key} session {id} turn finished, reply=\"{Log.Short((reply?.Data as AssistantMessageData)?.Content)}\"");
+            }
+            catch (Exception e) { Log.Error("handoff", $"{key} session {id} turn failed", e); }
+            finally { _busy.TryRemove(id, out _); await session.DisposeAsync(); }
+        });
     }
 
     // Queue via the inbox file so there is a record, then deliver on this same pass.
