@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "exec": "node",
+        "args": [".github/hooks/para-session.js", "start"],
+        "timeoutSec": 10
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "exec": "node",
+        "args": [".github/hooks/para-session.js", "stop"],
+        "timeoutSec": 10
+      }
+    ]
+  }
+}
