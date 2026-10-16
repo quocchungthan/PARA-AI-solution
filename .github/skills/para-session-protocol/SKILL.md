@@ -42,6 +42,15 @@ Breakpoints, you MUST stop instead of looping:
 4. If the bridge says `BREAKPOINT` (depth or handoff limit), set `needs_human` immediately.
 When Chung answers through the CLI/chat or the Bridge inbox, treat either as human input. In your own session file, set `attempts` to 0, remove resolved human needs, and clear `question` when no human need remains; set `state` to `working` and continue. If a human need is still unresolved, keep `state` as `needs_human` and update the single question. The dashboard reads this file, so it will keep showing `needs_human` until you update it.
 
+## Failure, retry and ask for help
+When a tool, edit, command or permission fails, do not silently stop or loop:
+1. **Retry once** with a different approach (another tool, a path inside the repo, a smaller step). Bump `attempts` and add one `progress` line naming the failure.
+2. **Classify the blocker**: another agent can fix it (missing context, a review, a result) -> `resolver: ai` plus a `handoff` to a suitable agent, with the exact error text in the prompt. You lack rights, credentials, approval or access -> `resolver: human`.
+3. **Never leave `state: working`** while blocked. Set `blocked` (ai) or `needs_human` (human), write one precise `question` that includes the failing command/path and the error, and end the turn.
+4. **Permission denied / "permission flow" errors** (for example editing outside the repo): do not retry the same call. Put the file under the repo's `data/` or the user's `C:\Users\727124\src\prompts` folder if that is allowed, otherwise raise a `human` need.
+5. **Interrupted turn**: if the bridge tells you it restarted and resumed you, re-read your session file, check what was already done, and continue; do not redo finished steps.
+The caller that delegated to you receives your `blocked`/`needs_human` state and `needs` as the result, so write them so it can act without asking you again.
+
 ## When to write
 1. On receiving a task: create the file (state `working`).
 2. At milestones only (state change, handoff, blocker/question, result, or a notable decision/finding): append one short line to `progress` and refresh `updatedAt`. Do not log routine steps; `progress` is read on demand by humans and the scrum-master, never needed to restore your own context.

@@ -149,6 +149,18 @@ public class Scanner
             state.Delegations.Add(d);
         }
 
+        // 1b. After a Bridge restart, delegated turns were killed with it; resume them once so they are not stuck.
+        if (pass == 1)
+            foreach (var d in state.Delegations.Where(d => d.Status == "assigned" && !_busy.ContainsKey(d.TargetId)))
+            {
+                var path = Path.Combine(_sessions, d.TargetId + ".json");
+                var target = File.Exists(path) ? Json.Read<SessionFile>(path) : null;
+                if (target is not null && target.State != "working") continue;
+                Log.Warn("recover", $"{d.Key}: target {d.TargetId} was interrupted by a Bridge restart; resuming it");
+                try { StartBackgroundResume(d.TargetId, d.Key); }
+                catch (Exception e) { Log.Error("recover", $"{d.Key} could not resume {d.TargetId}", e); }
+            }
+
         // 2. Finished delegated work -> feed the result back to the origin session.
         var open = state.Delegations.Where(d => d.Status == "assigned" && d.WantResult).ToList();
         Log.Debug("result", $"{open.Count} open delegation(s) awaiting result");
@@ -283,6 +295,21 @@ public class Scanner
             }
             catch (Exception e) { Log.Error("handoff", $"{key} session {id} turn failed", e); }
             finally { _busy.TryRemove(id, out _); await session.DisposeAsync(); }
+        });
+    }
+
+    void StartBackgroundResume(string id, string key)
+    {
+        _busy[id] = 0;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var reply = await ResumeAndSendAsync(id, "The PARA bridge restarted and interrupted your previous turn. Re-read your data/sessions file, check what is already done, and continue the task. Permission requests are auto-approved by the bridge. If something fails, follow the 'Failure, retry and ask for help' section of the para-session-protocol skill.");
+                Log.Info("recover", $"{key} session {id} resumed turn finished, reply=\"{Log.Short(reply)}\"");
+            }
+            catch (Exception e) { Log.Error("recover", $"{key} session {id} resumed turn failed", e); }
+            finally { _busy.TryRemove(id, out _); }
         });
     }
 

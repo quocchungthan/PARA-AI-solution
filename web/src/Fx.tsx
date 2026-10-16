@@ -174,7 +174,6 @@ export function Drawer() {
                 </form>
               </>
             )}
-            <InspectorPanel sessionId={s.sessionId} />
             <h4>Progress</h4>
             <ol className="timeline">
               {[...s.progress].reverse().map((p, i) => (
@@ -185,6 +184,7 @@ export function Drawer() {
               ))}
             </ol>
             {s.task && (<><h4>Task</h4><p className="taskText">{s.task}</p></>)}
+            <InspectorPanel sessionId={s.sessionId} />
           </>
         )}
       </aside>
