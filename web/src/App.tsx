@@ -5,7 +5,7 @@ import {
   toast, toggleTheme, unread, type Page,
 } from "./store";
 import { AgentCards, Health, Kanban as WorkQueue, Logs, Throughput } from "./Panels";
-import { Network } from "./Network";
+import { OrchestrationPanel } from "./office/OrchestrationPanel";
 import { Drawer } from "./Fx";
 import { AgentGlyph } from "./Glyph";
 import { BrandName, Loader, Logo, NotFoundTitle, OfflineBackdrop, OfflineTitle, PageSpark, Splash, StatusOrb } from "./Effects";
@@ -174,7 +174,7 @@ export function App() {
           <div key={current} className="page">
             {current === "overview" && (
               <div className="overview">
-                <Network />
+                <OrchestrationPanel />
                 <Logs />
               </div>
             )}
