@@ -52,6 +52,39 @@ Full documentation (install, React components, Vanilla JS/CSS enhancer, `data-pa
   - `para-start-session.sh <agent>`
   - `para-run-bridge.sh [--once]`
 
+## Functional review video tooling
+
+The `functional-reviewer` agent can use the repo-pinned helper under `tools/review-media/` to record reviewed Playwright flows and render ordered cuts with optional narration audio. On a new machine install Node.js 20+, FFmpeg/ffprobe, then run `npm ci --prefix tools/review-media`, `npm --prefix tools/review-media run install:browser`, and `npm --prefix tools/review-media run doctor`. Usage, safety constraints, timeline format and optional Concat workflow are in [`.github/skills/review-video/SKILL.md`](.github/skills/review-video/SKILL.md). Scripts and pinned dependencies are versioned for cross-machine setup; browser downloads and all generated media stay local and out of Git.
+
+## Optional Concat editor source
+
+The official [jub0t/Concat](https://github.com/jub0t/Concat) source is available as a Git submodule at `third_party/Concat`, pinned to release **v0.2.7** (commit `14b5998d793d90858ac982926374044bba4bf39f`). It is optional: recording/rendering helpers work without it, and normal repo builds do not build Concat.
+
+Initialize it when cloning this repository:
+
+```sh
+git clone --recurse-submodules https://github.com/quocchungthan/PARA-AI-solution.git
+```
+
+Or initialize it in an existing checkout:
+
+```sh
+git submodule update --init --recursive
+```
+
+**Quickest way to run:** install the native build for your OS from [Concat v0.2.7 releases](https://github.com/jub0t/Concat/releases/tag/v0.2.7) (Windows, macOS, or Linux), then launch Concat normally. AI models download locally when first used. To enable the review helper, open **Settings → Remote → Remote control** and leave the listener on `127.0.0.1:7420`. Keep the generated token local; provide it as `CONCAT_API_TOKEN` in the process environment when running the helper. Do not expose the API port to a network.
+
+**Build and run from the submodule:** Rust 1.93+, FFmpeg 7+ development libraries, CMake, and a C++ compiler are required. Platform-specific FFmpeg setup and Linux development packages are documented in [`third_party/Concat/src/README.md`](third_party/Concat/src/README.md). Then, from the repository root:
+
+```sh
+cd third_party/Concat/src
+cargo run -p concat
+```
+
+This launches the desktop editor. Enable **Settings → Remote → Remote control** in the window to use the repo's Concat helper. To run the standalone JSON-RPC server instead, use `cargo run -p concat-cli -- serve` from the same `src/` directory and retain its loopback-only default. The repository helper and complete timeline instructions are in [`.github/skills/review-video/SKILL.md`](.github/skills/review-video/SKILL.md).
+
+The submodule retains Concat's AGPL-3.0-or-later license and notices. It points to upstream source; this repository does not modify or relicense it, include its model downloads, or ship a prebuilt app.
+
 ## How PARA works
 
 Copilot CLI sessions coordinate through git-ignored JSON files in `data/`:
