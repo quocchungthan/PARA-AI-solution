@@ -18,12 +18,12 @@ test("characters: stable lead identities, unknown workers, drag protection and m
   const identity = await lead.getAttribute("data-identity");
   await page.locator(".splash").waitFor({ state: "detached" });
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/maximum-light.png",
+    path: "test-results/office-evidence/maximum-light.png",
   });
   await page.getByRole("button", { name: "Toggle theme" }).click();
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/maximum-dark.png",
+    path: "test-results/office-evidence/maximum-dark.png",
   });
   const rect = await lead.boundingBox();
   await page.mouse.move(rect!.x + rect!.width / 2, rect!.y + rect!.height + 20);

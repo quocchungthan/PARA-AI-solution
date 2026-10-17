@@ -54,7 +54,7 @@ test("accessibility: compact office is opt-in and all layouts avoid horizontal o
         )
         .toBeGreaterThan(200);
       await page.screenshot({
-        path: "../docs/superpowers/verification/assets/agent-office/compact.png",
+        path: "test-results/office-evidence/compact.png",
         fullPage: true,
       });
     }
@@ -113,6 +113,6 @@ test("accessibility: lazy renderer failure is local and can be retried", async (
     timeout: 20000,
   });
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/renderer-retry.png",
+    path: "test-results/office-evidence/renderer-retry.png",
   });
 });

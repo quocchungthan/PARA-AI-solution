@@ -85,11 +85,11 @@ test("performance: maximum population and measured 30-second interaction sample"
       textures: c.getAttribute("data-textures"),
     };
   });
-  await mkdir("../docs/superpowers/verification/assets/agent-office", {
+  await mkdir("test-results/office-evidence", {
     recursive: true,
   });
   await writeFile(
-    "../docs/superpowers/verification/assets/agent-office/performance.json",
+    "test-results/office-evidence/performance.json",
     JSON.stringify(
       {
         browser: browser.version(),

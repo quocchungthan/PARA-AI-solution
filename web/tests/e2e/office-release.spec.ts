@@ -16,7 +16,7 @@ test("release: idle pantry, actual walking, selected-worker and fallback evidenc
     .click();
   await page.waitForTimeout(400);
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/pantry-idle.png",
+    path: "test-results/office-evidence/pantry-idle.png",
   });
   await page.getByRole("button", { name: "Home view", exact: true }).click();
   api.setSnapshot(populated(1));
@@ -44,18 +44,18 @@ test("release: idle pantry, actual walking, selected-worker and fallback evidenc
       ),
   );
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/selected-worker.png",
+    path: "test-results/office-evidence/selected-worker.png",
   });
   await page.getByRole("button", { name: "Toggle theme" }).click();
   await page.waitForTimeout(300);
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/selected-worker-dark.png",
+    path: "test-results/office-evidence/selected-worker-dark.png",
   });
   await page
     .locator(".officeCanvas canvas")
     .dispatchEvent("webglcontextlost", { cancelable: true });
   await expect(page.getByText("3D office unavailable")).toBeVisible();
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/rendering-fallback.png",
+    path: "test-results/office-evidence/rendering-fallback.png",
   });
 });

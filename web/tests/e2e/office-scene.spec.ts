@@ -15,13 +15,13 @@ test("scene: visual evidence", async ({ page }) => {
     await page.getByRole("button", { name: "Home view", exact: true }).click();
     await page.waitForTimeout(800);
     await page.screenshot({
-      path: `../docs/superpowers/verification/assets/agent-office/static-light-${width}.png`,
+      path: `test-results/office-evidence/static-light-${width}.png`,
       fullPage: true,
     });
     await page.getByRole("button", { name: "Toggle theme" }).click();
     await page.waitForTimeout(500);
     await page.screenshot({
-      path: `../docs/superpowers/verification/assets/agent-office/static-dark-${width}.png`,
+      path: `test-results/office-evidence/static-dark-${width}.png`,
       fullPage: true,
     });
     await page.getByRole("button", { name: "Toggle theme" }).click();

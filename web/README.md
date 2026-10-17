@@ -32,7 +32,7 @@ npm run build:ui
 
 Browser tests intercept the local Bridge API with synthetic fixtures and reject writes. To smoke-test built assets below a deployment prefix, run `OFFICE_PRODUCTION=1 npm run test:e2e:office -- --grep 'production:'` (PowerShell: `$env:OFFICE_PRODUCTION='1'` first). The browser harness defaults to deterministic software graphics; `OFFICE_GPU_PROFILE=1` uses an installed Edge browser's normal graphics path for a local performance measurement. The verification-only `office-checks.yml` workflow never publishes or deploys.
 
-See [design and visual references](../docs/superpowers/specs/2026-10-17-agent-office-design.md), [implementation plan](../docs/superpowers/plans/2026-10-17-agent-office.md), and [observed verification](../docs/superpowers/verification/2026-10-17-agent-office.md).
+Browser screenshots and frame timings are written to `test-results/office-evidence/`, which is ignored by Git and included in CI failure artifacts.
 
 ---
 

@@ -49,7 +49,7 @@ test("attention: other floors wait for click; health and failed handoffs stay di
     page.getByRole("complementary", { name: "Office observation" }),
   ).toContainText("Can we use this design?");
   await page.screenshot({
-    path: "../docs/superpowers/verification/assets/agent-office/other-floor-attention.png",
+    path: "test-results/office-evidence/other-floor-attention.png",
   });
 });
 test("reconnect: selection and camera survive outage, no arrival backlog or duplicate polling", async ({
