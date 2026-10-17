@@ -1,6 +1,6 @@
 {
   "name": "@quocchungthan/para-ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PARA Bridge web dashboard and reusable PARA UI kit (animations, highlights, BorderGlow, ClickSpark, ShinyText, LatticeLoader, StatusOrb).",
   "type": "module",
   "main": "./dist-ui/para-ui.umd.js",

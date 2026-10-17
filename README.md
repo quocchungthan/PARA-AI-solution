@@ -35,6 +35,8 @@ Valid categories: `SearchCollect`, `ConvertTransformCompose`, `ObserveWatching`,
 
 ## Reusable UI Package (`@quocchungthan/para-ui`) & Seafile Custom CSS
 
+Full documentation (install, React components, Vanilla JS/CSS enhancer, `data-para-*` attributes, and Seafile Custom CSS): **[`web/README.md`](web/README.md)** (also rendered directly on your GitHub Packages page for `@quocchungthan/para-ui`).
+
 `npm run build:ui` in `web/` builds the standalone UI package and Seafile Custom CSS into `web/dist-ui/` (kept separate from `web/dist/` so `para-bridge` deploys untouched). In CI (`.github/workflows/notify-pages.yml`):
 - Publishes **`@quocchungthan/para-ui`** to your personal GitHub Packages tab (`para-ui.css`, `para-ui.js`, `para-ui.umd.js`, `react.js`, `index.d.ts`, `seafile-custom.css`).
 - Uploads the **`seafile-custom-css`** artifact (`seafile-custom.css` and `seafile-custom.min.css`) on the workflow run (and outputs a copyable block in the Actions summary) so you can paste it directly into self-hosted **Seafile** (**System Admin → Settings / Branding → Custom CSS** or `BRANDING_CSS = 'custom/custom.css'` in `conf/seahub_settings.py`).
