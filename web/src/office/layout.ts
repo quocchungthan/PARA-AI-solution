@@ -28,6 +28,13 @@ export type OfficeLayout = {
   human: Vec3;
   entry: Vec3;
   lounge: readonly Vec3[];
+  loungeApproaches: readonly Vec3[];
+  loungeFurniture: {
+    sofa: Rect;
+    backrest: Rect;
+    arms: readonly Rect[];
+    table: Rect;
+  };
   walkGraph: {
     nodes: readonly Vec3[];
     edges: readonly (readonly [number, number])[];
@@ -151,6 +158,12 @@ const leads = Object.fromEntries(
   seats.filter((s) => s.reservedFor).map((s) => [s.reservedFor, s.position]),
 ) as OfficeLayout["leads"];
 leads.coordinator = [-1.8, 0, -4.3];
+const loungeFurniture: OfficeLayout["loungeFurniture"] = {
+  sofa: { x: 10.55, z: 5.75, width: 3.4, depth: 1.5 },
+  backrest: { x: 10.55, z: 5.69, width: 3.4, depth: 0.32 },
+  arms: [10.5, 13.7].map((x) => ({ x, z: 5.75, width: 0.3, depth: 1.5 })),
+  table: { x: 11.05, z: 7.825, width: 2.4, depth: 1.15 },
+};
 export const OFFICE_LAYOUT: OfficeLayout = {
   bounds: { x: -15, z: -10, width: 30, depth: 20 },
   rooms,
@@ -159,7 +172,10 @@ export const OFFICE_LAYOUT: OfficeLayout = {
     ...desks,
     ...wallRects,
     { x: 13.3, z: -1.5, width: 1.4, depth: 5 },
-    { x: 11, z: 4, width: 3, depth: 1.2 },
+    loungeFurniture.sofa,
+    loungeFurniture.backrest,
+    ...loungeFurniture.arms,
+    loungeFurniture.table,
   ],
   walls,
   doors,
@@ -171,6 +187,11 @@ export const OFFICE_LAYOUT: OfficeLayout = {
     [11.5, 0, 6.5],
     [13, 0, 6.5],
   ],
+  loungeApproaches: [
+    [11.5, 0, 7.5],
+    [13, 0, 7.5],
+  ],
+  loungeFurniture,
   walkGraph: { nodes: [], edges: [] },
 };
 OFFICE_LAYOUT.walkGraph = createWalkGraph(OFFICE_LAYOUT);

@@ -10,7 +10,7 @@
 
 **Spec:** [Approved design](../specs/2026-10-17-agent-office-design.md). Read it and its two image references before execution.
 
-**Status:** native execution approved and implemented on 2026-10-17. Final regression and independent whole-branch review are in progress; see the [verification record](../verification/2026-10-17-agent-office.md).
+**Status:** native execution complete on 2026-10-17. All nine tasks, independent whole-branch review, its two Important fixes, and final local verification are complete; one animation Minor is deferred. See the [verification record](../verification/2026-10-17-agent-office.md). Integration awaits the human's choice.
 
 ## Global Constraints
 

@@ -9,6 +9,21 @@ export function collectOfficeEvents(
   const floor = next.floors.find((f) => f.rootId === floorId);
   if (!floor) return [];
   const events: OfficeEvent[] = [];
+  const reported = new Set<string>();
+  function report(sessionId: string, originId: string, delegationKey: string) {
+    const key = JSON.stringify([sessionId, originId]);
+    if (reported.has(key)) return;
+    reported.add(key);
+    events.push({
+      id: `report:${key}:${nowMs}`,
+      floorId,
+      sessionId,
+      originId,
+      delegationKey,
+      kind: "report",
+      createdAt: nowMs,
+    });
+  }
   for (const id of floor.sessionIds) {
     const s = next.sessionsById.get(id)!,
       before = previous.sessionsById.get(id);
@@ -26,16 +41,13 @@ export function collectOfficeEvents(
         createdAt: nowMs,
       });
     if (before?.state !== "done" && before && s.state === "done")
-      events.push({
-        id: `done:${id}:${nowMs}`,
-        floorId,
-        sessionId: id,
-        kind: "report",
-        createdAt: nowMs,
-        originId: next.delegations.find(
-          (d) => d.targetId === id && floor.sessionIds.includes(d.originId),
-        )?.originId,
-      });
+      for (const d of next.delegations)
+        if (
+          d.targetId === id &&
+          floor.sessionIds.includes(d.originId) &&
+          ["assigned", "result_fed"].includes(d.status)
+        )
+          report(id, d.originId, d.key);
   }
   const old = new Map(previous.delegations.map((d) => [d.key, d]));
   for (const d of next.delegations) {
@@ -46,11 +58,12 @@ export function collectOfficeEvents(
       continue;
     const before = old.get(d.key);
     if (before?.status === d.status) continue;
-    if (d.status === "assigned" || d.status === "result_fed")
+    if (d.status === "result_fed") report(d.targetId, d.originId, d.key);
+    else if (d.status === "assigned")
       events.push({
         id: `${d.key}:${d.status}:${nowMs}`,
         floorId,
-        kind: d.status === "result_fed" ? "report" : "handoff",
+        kind: "handoff",
         sessionId: d.targetId,
         originId: d.originId,
         delegationKey: d.key,

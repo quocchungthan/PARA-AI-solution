@@ -91,13 +91,25 @@ export function Furniture({
     box(v, [14.1, 1.2, -2], [1.35, 2.4, 1.1], p.paper);
     box(v, [13.4, 1.6, -2], [0.08, 0.45, 0.08], p.ink);
     // Lounge aligned with its reserved idle anchors.
-    box(v, [12.25, 0.5, 6.5], [3.4, 0.65, 1.5], p.fabricDark);
-    box(v, [12.25, 1.05, 5.85], [3.4, 1.25, 0.32], p.fabric);
-    for (const x of [10.65, 13.85])
-      box(v, [x, 0.85, 6.5], [0.3, 0.8, 1.5], p.fabric);
-    for (const x of [11.5, 13])
-      box(v, [x, 0.88, 6.55], [1.3, 0.22, 1.12], p.fabric);
-    box(v, [12.25, 0.7, 8.4], [2.4, 0.15, 1.15], p.woodLight);
+    const lounge = layout.loungeFurniture;
+    const furnishing = (
+      r: typeof lounge.sofa,
+      y: number,
+      height: number,
+      color: string,
+    ) =>
+      box(
+        v,
+        [r.x + r.width / 2, y, r.z + r.depth / 2],
+        [r.width, height, r.depth],
+        color,
+      );
+    furnishing(lounge.sofa, 0.5, 0.65, p.fabricDark);
+    furnishing(lounge.backrest, 1.05, 1.25, p.fabric);
+    for (const arm of lounge.arms) furnishing(arm, 0.85, 0.8, p.fabric);
+    for (const [x, , z] of layout.lounge)
+      box(v, [x, 0.88, z + 0.05], [1.3, 0.22, 1.12], p.fabric);
+    furnishing(lounge.table, 0.7, 0.15, p.woodLight);
     for (const x of [11.4, 13.1])
       box(v, [x, 0.34, 8.4], [0.14, 0.65, 0.7], p.wood);
     for (const [x, z] of [

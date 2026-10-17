@@ -1,6 +1,6 @@
 # Agent office verification
 
-Date: 2026-10-17. Implementation and local verification complete; independent branch review is pending.
+Date: 2026-10-17. Implementation, independent review and local verification complete. No open Critical or Important findings; one Minor is deferred. Changes are committed locally; no integration or deployment has occurred.
 
 The scene is real procedural Three.js geometry, not a concept PNG. It interprets the approved Botanical Studio references with a fixed lower three-quarter orthographic camera, roomy rear offices, four team islands, research stations, creative table/board, pantry and sofa. The original graph and session/reply drawer are retained.
 
@@ -16,7 +16,7 @@ Measured optimizations share one geometry/material allocation, batch each articu
 
 - Baseline before implementation: `npm ci`, `npm run build`, `npm run build:ui` passed.
 - Data/status/runtime/layout/motion/notice tests: 16 passing at the end of Task 7. New behavioral assertions were observed failing before their implementation.
-- Final local commands: `npm run test:office` passed 16/16; `npm run test:e2e:office` passed 21/21 applicable tests in 4.6 minutes, with the production-only test skipped for its separate invocation; `npm run build` and `npm run build:ui` passed. A settled-canvas framing regression and explicit circulation graph export were added after observed failures; the affected camera/attention/reconnect/theme checks also passed 4/4.
+- Final local commands after review fixes: `npm run test:office` passed 18/18; `npm run test:e2e:office` passed 21/21 applicable tests in 4.7 minutes, with the production-only test skipped for its separate invocation; `npm run build` and `npm run build:ui` passed. A settled-canvas framing regression and explicit circulation graph export were added after observed failures; the affected camera/attention/reconnect/theme checks also passed 4/4. `git diff --check` passed.
 - `$env:OFFICE_PRODUCTION='1'; npm run test:e2e:office -- --grep 'production:'` passed against the fresh build at `/office-check/`. The office renderer is a separate lazy chunk (~966 kB minified / 261 kB gzip); Vite emits its standard large-chunk warning. `dist-ui` JavaScript contains none of the office or Three.js renderer code.
 - Geometry resource tests reproduced 75 allocations, then passed with shared resources. Per-frame draw checks reproduced 149 shadow-inclusive calls, then 75 limb draws, and passed after batching with fewer than 30 calls.
 - A collapsed compact preview was found by screenshot inspection, reproduced with a minimum usable-height assertion, and fixed. Keyboard close/Escape restore focus; the existing drawer closes observation details. Renderer initialization, lazy fetch failure/retry and context-loss/retry retain textual observation and Logs.
@@ -36,4 +36,15 @@ Images are actual browser screenshots using synthetic test fixtures. They are ev
 
 The snapshot has no explicit root/floor ID. Floors follow observed valid delegations from a registered coordinator; unresolved ancestry, cycles, unknown roles and unregistered records remain disclosed. Shared workers disclose multiple delegators. A `result_fed` handoff can report waiting/blocked work and never implies successful completion on its own. Polling can miss intermediate events; short animations are coalesced rather than treated as a complete event replay. Ten is a character display limit, with every session retained in the roster/history.
 
-Hardware frame-rate acceptance is observed for the documented Edge/Intel Arc configuration. Independent review is pending. The new CI workflow is configured but has not run on GitHub in this local execution.
+Hardware frame-rate acceptance is observed for the documented Edge/Intel Arc configuration. The new CI workflow is configured but has not run on GitHub in this local execution.
+
+## Independent review
+
+A fresh, read-only whole-branch review on `c347115..b18ea89` found no Critical issues and two Important issues. Both were reproduced with failing tests and fixed in one implementation pass:
+
+- A completion report previously chose the first historical delegation, including a failed relationship. Reports now use only assigned/result-fed relationships on the selected floor, once per real delegator. Shared work reports to each valid delegator; duplicate history and a simultaneous completion/result-fed change do not create duplicate reports. Regression: `completion reports follow successful delegators, once each, within the floor`.
+- Lounge routes previously crossed the rendered sofa backrest because the collision footprint was elsewhere. Furniture rendering and navigation now share sofa/backrest/arm/table footprints. Walking routes use front approaches, followed by explicit cushion seating segments; return routes leave through those same approaches. Regression: `lounge visits approach the sofa from the front without crossing its rendered backrest`.
+
+After the fixes, the expanded pure suite passed 18/18, the full browser suite passed 21 applicable cases, the separate production-prefix smoke passed, and both builds passed. No second reviewer was dispatched. The reviewer declined no behaviors as outside scope; no rulings were needed. The two fixes are verified by their observed RED→GREEN tests and the green full suite.
+
+Deferred Minor: department leads retain their seated pose while moving between desks and lounge. Their route and status remain correct; a standing/walking pose lifecycle is remaining animation polish.

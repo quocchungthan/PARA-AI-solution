@@ -66,6 +66,19 @@ export function findRoute(
   }
   const key = `${from.join()}:${to.join()}`;
   if (routes.has(key)) return routes.get(key)!;
+  // Only the final front-to-cushion segment is a seating transition. The
+  // circulation graph excludes the entire sofa, its backrest, arms and table.
+  const access = (p: Vec3) => {
+    const i = l.lounge.findIndex(
+      (seat, i) =>
+        Math.abs(p[0] - seat[0]) < 0.01 &&
+        p[2] >= seat[2] &&
+        p[2] <= l.loungeApproaches[i][2],
+    );
+    return i < 0 ? p : l.loungeApproaches[i];
+  };
+  const walkFrom = access(from),
+    walkTo = access(to);
   let graph = graphCache.get(l);
   if (!graph) {
     const indices = new Map(
@@ -83,8 +96,8 @@ export function findRoute(
   }
   const id = (p: Vec3) =>
     `${Math.round(p[0] * 2) / 2},${Math.round(p[2] * 2) / 2}`;
-  const start = graph.indices.get(id(from)),
-    end = graph.indices.get(id(to));
+  const start = graph.indices.get(id(walkFrom)),
+    end = graph.indices.get(id(walkTo));
   if (start === undefined || end === undefined)
     throw new Error(`No office route endpoint: ${key}`);
   const queue = [start],
@@ -109,8 +122,8 @@ export function findRoute(
     path.unshift(l.walkGraph.nodes[p]);
     p = prev.get(p) ?? null;
   }
-  path[0] = from;
-  path[path.length - 1] = to;
+  path[0] = walkFrom;
+  path[path.length - 1] = walkTo;
   const simplified = path.filter(
     (p, i) =>
       i === 0 ||
@@ -118,8 +131,13 @@ export function findRoute(
       (p[0] - path[i - 1][0]) * (path[i + 1][2] - p[2]) !==
         (p[2] - path[i - 1][2]) * (path[i + 1][0] - p[0]),
   );
-  routes.set(key, simplified);
-  return simplified;
+  const result = [
+    ...(walkFrom !== from ? [from] : []),
+    ...simplified,
+    ...(walkTo !== to ? [to] : []),
+  ];
+  routes.set(key, result);
+  return result;
 }
 export const pathDuration = (points: readonly Vec3[]) =>
   (points.slice(1).reduce((total, p, i) => total + distance(points[i], p), 0) /
