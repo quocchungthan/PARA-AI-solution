@@ -1,10 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { officeRuntime, dispatchOffice, focusOfficeSession } from "./state";
+import {
+  officeRuntime,
+  dispatchOffice,
+  focusOfficeSession,
+  dismissedOfficeNotices,
+} from "./state";
 import { OfficeRoster } from "./OfficeRoster";
 import { FloorSelector } from "./FloorSelector";
 import { OfficeDetails } from "./OfficeDetails";
 import { openSession, dark } from "../store";
-import { presentSession, sessionTitle } from "./model";
+import { deriveOfficeNotices, sessionTitle } from "./model";
 import { SceneBoundary } from "./scene/SceneBoundary";
 import { OFFICE_LAYOUT } from "./layout";
 import type { OfficeCameraHandle, OfficeSelection } from "./types";
@@ -49,6 +54,8 @@ export function OfficePanel() {
       }}
     />
   );
+  const notices = deriveOfficeNotices(runtime.model);
+  const dismissed = dismissedOfficeNotices.value;
   return (
     <div className="officePanel">
       <FloorSelector
@@ -57,23 +64,31 @@ export function OfficePanel() {
         onSelect={(floorId) => dispatchOffice({ type: "selectFloor", floorId })}
       />
       {runtime.notice && <p role="status">{runtime.notice}</p>}
+      <span className="officeSrOnly" aria-live="polite">
+        {notices.filter((n) => n.kind === "human").length} requests for human
+        input; {notices.filter((n) => n.kind === "health").length} session
+        health issues.
+      </span>
       <div className="officeNotices" aria-label="Floor attention">
-        {runtime.model.floors.flatMap((f) =>
-          f.sessionIds
-            .filter(
-              (id) =>
-                presentSession(runtime.model.sessionsById.get(id)!).needsHuman,
-            )
-            .map((id) => (
+        {notices
+          .filter((n) => !dismissed.has(n.id))
+          .map((n) => (
+            <div className={`officeNotice notice-${n.kind}`} key={n.id}>
               <button
-                key={`${f.rootId}:${id}`}
-                onClick={() => focusOfficeSession(f.rootId, id)}
+                onClick={() => focusOfficeSession(n.floorId, n.sessionId)}
               >
-                Needs you · {f.title} ·{" "}
-                {sessionTitle(runtime.model.sessionsById.get(id)!)}
+                {n.label}
               </button>
-            )),
-        )}
+              <button
+                aria-label={`Dismiss notice: ${n.label}`}
+                onClick={() =>
+                  (dismissedOfficeNotices.value = new Set([...dismissed, n.id]))
+                }
+              >
+                ×
+              </button>
+            </div>
+          ))}
       </div>
       {floor ? (
         <>

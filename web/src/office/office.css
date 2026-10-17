@@ -112,6 +112,28 @@
 .officeNotices:empty {
   display: none;
 }
+.officeNotice {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+}
+.officeNotice button:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.officeNotice button:last-child {
+  padding: 5px;
+}
+.officeSrOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .officeNotices button {
   background: var(--office-soft);
   border: 1px solid var(--border);

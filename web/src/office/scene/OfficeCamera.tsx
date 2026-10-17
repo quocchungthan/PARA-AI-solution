@@ -92,6 +92,7 @@ export function OfficeCamera({
       );
       c.updateProjectionMatrix();
       controls.update();
+      save();
     } else home();
     const redraw = () => invalidate();
     controls.addEventListener("change", redraw);

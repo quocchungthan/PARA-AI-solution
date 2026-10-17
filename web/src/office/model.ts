@@ -32,6 +32,57 @@ export function presentSession(s: Session): SessionPresentation {
 }
 export const sessionTitle = (s: Session) =>
   s.title?.trim() || s.task?.trim().slice(0, 70) || s.sessionId.slice(0, 12);
+export type OfficeNotice = {
+  id: string;
+  floorId: string;
+  sessionId: string;
+  kind: "human" | "health" | "handoff";
+  label: string;
+};
+export function deriveOfficeNotices(model: OfficeModel): OfficeNotice[] {
+  const notices: OfficeNotice[] = [];
+  for (const floor of model.floors) {
+    for (const id of floor.sessionIds) {
+      const s = model.sessionsById.get(id)!,
+        p = presentSession(s);
+      if (p.needsHuman)
+        notices.push({
+          id: JSON.stringify([
+            "human",
+            floor.rootId,
+            id,
+            s.question,
+            s.needs.filter((n) => n.resolver === "human"),
+          ]),
+          floorId: floor.rootId,
+          sessionId: id,
+          kind: "human",
+          label: `Needs you · ${floor.title} · ${sessionTitle(s)}`,
+        });
+      if (p.healthIssues.length)
+        notices.push({
+          id: JSON.stringify(["health", floor.rootId, id, p.healthIssues]),
+          floorId: floor.rootId,
+          sessionId: id,
+          kind: "health",
+          label: `Health · ${floor.title} · ${sessionTitle(s)} · ${p.healthIssues.join(", ")}`,
+        });
+    }
+    for (const d of model.delegations.filter(
+      (d) =>
+        floor.sessionIds.includes(d.originId) &&
+        ["failed", "limit_reached"].includes(d.status),
+    ))
+      notices.push({
+        id: JSON.stringify(["handoff", floor.rootId, d.key, d.status]),
+        floorId: floor.rootId,
+        sessionId: d.originId,
+        kind: "handoff",
+        label: `Handoff ${d.status === "failed" ? "failed" : "limited"} · ${floor.title} · ${d.targetId}`,
+      });
+  }
+  return notices;
+}
 export function deriveOfficeModel(snapshot: Snapshot): OfficeModel {
   const sessionsById = new Map(snapshot.sessions.map((s) => [s.sessionId, s]));
   const edges = snapshot.delegations.filter(
