@@ -16,6 +16,7 @@ import { OfficeCamera } from "./OfficeCamera";
 import { Actors, describeActors } from "./Actors";
 import { Labels, type LabelAnchor } from "./Labels";
 import { Handoffs } from "./Handoffs";
+import { SceneMetrics } from "./resources";
 export type OfficeCanvasProps = {
   floor: OfficeFloor;
   floorRuntime: FloorRuntime;
@@ -129,6 +130,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
               />
             </OfficeScene>
             <Labels anchors={anchors} registry={registry} elements={elements} />
+            <SceneMetrics />
           </Canvas>
           <div className="officeSignals" aria-hidden="true">
             {props.floorRuntime.queue

@@ -51,17 +51,29 @@ export function OfficeCamera({
       size.width / (maxX * 2.2),
       size.height / (maxY * 2.2),
     );
-    controls.minZoom = homeZoom * 0.6;
-    controls.maxZoom = homeZoom * 2.5;
+    const initial = latest.current.pose;
+    let fitZoom =
+      initial?.viewportWidth === size.width && initial.homeZoom
+        ? initial.homeZoom
+        : homeZoom;
+    function zoomBounds() {
+      controls.minZoom = fitZoom * 0.6;
+      controls.maxZoom = fitZoom * 2.5;
+    }
+    zoomBounds();
     function save() {
       latest.current.onChange({
         position: c.position.toArray() as [number, number, number],
         target: controls.target.toArray() as [number, number, number],
         zoom: c.zoom,
+        homeZoom: fitZoom,
+        viewportWidth: size.width,
       });
       invalidate();
     }
     function home() {
+      fitZoom = homeZoom;
+      zoomBounds();
       c.position.set(-26, 28, 40);
       controls.target.set(0, 0, 0);
       c.zoom = homeZoom;
@@ -74,6 +86,8 @@ export function OfficeCamera({
       focusRoom(id) {
         const r = layout.rooms.find((r) => r.id === id);
         if (!r) return;
+        fitZoom = homeZoom;
+        zoomBounds();
         controls.target.set(r.x + r.width / 2, 0, r.z + r.depth / 2);
         c.position.copy(controls.target).add(new Vector3(-26, 28, 40));
         c.zoom = homeZoom * 1.85;
@@ -82,14 +96,16 @@ export function OfficeCamera({
         save();
       },
     };
-    const initial = latest.current.pose;
     if (initial) {
       c.position.set(...initial.position);
       controls.target.set(...initial.target);
-      c.zoom = Math.max(
-        controls.minZoom,
-        Math.min(controls.maxZoom, initial.zoom),
-      );
+      const zoom =
+        initial.viewportWidth !== undefined &&
+        initial.viewportWidth !== size.width &&
+        initial.homeZoom
+          ? (initial.zoom / initial.homeZoom) * homeZoom
+          : initial.zoom;
+      c.zoom = Math.max(controls.minZoom, Math.min(controls.maxZoom, zoom));
       c.updateProjectionMatrix();
       controls.update();
       save();

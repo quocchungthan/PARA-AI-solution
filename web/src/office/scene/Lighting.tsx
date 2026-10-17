@@ -9,7 +9,9 @@ export function Lighting({ p }: { p: BotanicalPalette }) {
         intensity={p.key}
         color={p.keyColor}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
+        shadow-autoUpdate={false}
+        shadow-needsUpdate={true}
         shadow-camera-left={-23}
         shadow-camera-right={23}
         shadow-camera-top={20}

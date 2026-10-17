@@ -5,6 +5,7 @@ import { RoomShell } from "./RoomShell";
 import { Furniture } from "./Furniture";
 import { Plants } from "./Plants";
 import { Lighting } from "./Lighting";
+import { SceneResources } from "./resources";
 export function OfficeScene({
   layout,
   theme,
@@ -16,13 +17,13 @@ export function OfficeScene({
 }) {
   const p = useMemo(() => botanicalPalette(theme), [theme]);
   return (
-    <>
+    <SceneResources>
       <color attach="background" args={[p.background]} />
       <Lighting p={p} />
       <RoomShell layout={layout} p={p} />
       <Furniture layout={layout} p={p} />
       <Plants p={p} />
       {children}
-    </>
+    </SceneResources>
   );
 }

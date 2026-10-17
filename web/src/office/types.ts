@@ -61,7 +61,13 @@ export type OfficeModel = {
   }[];
 };
 export type Vec3 = readonly [number, number, number];
-export type CameraPose = { position: Vec3; target: Vec3; zoom: number };
+export type CameraPose = {
+  position: Vec3;
+  target: Vec3;
+  zoom: number;
+  homeZoom?: number;
+  viewportWidth?: number;
+};
 export type OfficeCameraHandle = {
   home(): void;
   focusRoom(roomId: string): void;

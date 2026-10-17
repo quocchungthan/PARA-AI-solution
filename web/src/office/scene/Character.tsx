@@ -1,9 +1,8 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import type { Group } from "three";
 import { sampleWorkPose } from "./motion";
 import type { OfficeRole } from "../types";
-import { box, VoxelBatch, type Voxel } from "./resources";
+import { box, RiggedBatch, type Voxel, type RigPart } from "./resources";
 export type CharacterKind = "human" | "assistant" | "lead" | "worker";
 export const identityHash = (seed: string) =>
   [...seed].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
@@ -26,9 +25,7 @@ export function Character({
   reducedMotion?: boolean;
   rest?: boolean;
 }) {
-  const head = useRef<Group>(null),
-    left = useRef<Group>(null),
-    right = useRef<Group>(null);
+  const angles = useRef([0, 0, 0, 0]);
   useFrame(({ clock }) => {
     const t = clock.elapsedTime * 1000;
     const moving = pose === "standing";
@@ -37,18 +34,16 @@ export function Character({
       animate && activity === "working" && !moving
         ? sampleWorkPose(role, t)
         : { head: 0, leftArm: 0, rightArm: 0 };
-    if (head.current) head.current.rotation.y = work.head;
-    if (left.current)
-      left.current.rotation.x =
-        work.leftArm +
-        (animate && moving
-          ? Math.sin(t * 0.008) * 0.15
-          : animate && rest
-            ? -0.25 + Math.sin(t * 0.001) * 0.05
-            : 0);
-    if (right.current)
-      right.current.rotation.x =
-        work.rightArm + (animate && moving ? -Math.sin(t * 0.008) * 0.15 : 0);
+    angles.current[1] = work.head;
+    angles.current[2] =
+      work.leftArm +
+      (animate && moving
+        ? Math.sin(t * 0.008) * 0.15
+        : animate && rest
+          ? -0.25 + Math.sin(t * 0.001) * 0.05
+          : 0);
+    angles.current[3] =
+      work.rightArm + (animate && moving ? -Math.sin(t * 0.008) * 0.15 : 0);
   });
   const voxels = useMemo(() => {
     const v: Voxel[] = [];
@@ -144,6 +139,15 @@ export function Character({
       right: arm(0.44),
     };
   }, [identitySeed, role, kind, pose, rest]);
+  const parts = useMemo<readonly RigPart[]>(
+    () => [
+      { voxels: voxels.body, pivot: [0, 0, 0], axis: "none" },
+      { voxels: voxels.head, pivot: [0, 1.7, 0], axis: "y" },
+      { voxels: voxels.left, pivot: [-0.44, 1.4, 0], axis: "x" },
+      { voxels: voxels.right, pivot: [0.44, 1.4, 0], axis: "x" },
+    ],
+    [voxels],
+  );
   return (
     <group
       onClick={(e) => {
@@ -151,16 +155,7 @@ export function Character({
         if (e.delta <= 4) onSelect();
       }}
     >
-      <VoxelBatch voxels={voxels.body} />
-      <group ref={head} position={[0, 1.7, 0]}>
-        <VoxelBatch voxels={voxels.head} />
-      </group>
-      <group ref={left} position={[-0.44, 1.4, 0]}>
-        <VoxelBatch voxels={voxels.left} />
-      </group>
-      <group ref={right} position={[0.44, 1.4, 0]}>
-        <VoxelBatch voxels={voxels.right} />
-      </group>
+      <RiggedBatch parts={parts} angles={angles} />
     </group>
   );
 }

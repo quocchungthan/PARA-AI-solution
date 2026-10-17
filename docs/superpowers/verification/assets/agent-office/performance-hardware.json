@@ -1,0 +1,20 @@
+{
+  "browser": "155.0.4283.45",
+  "durationSeconds": 30,
+  "characters": 18,
+  "frames": 1794,
+  "meanMs": 16.725919732440268,
+  "p95Ms": 16.899999999997817,
+  "fps": 59.78744463663061,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+  "viewport": [
+    1440,
+    900
+  ],
+  "dpr": 1,
+  "renderer": "ANGLE (Intel, Intel(R) Arc(TM) Graphics (0x00007D55) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "drawCalls": "21",
+  "triangles": "23532",
+  "geometries": "1",
+  "textures": "3"
+}

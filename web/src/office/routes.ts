@@ -18,6 +18,42 @@ export function isWalkable(l: OfficeLayout, p: Vec3) {
   );
 }
 const cache = new WeakMap<OfficeLayout, Map<string, readonly Vec3[]>>();
+export function createWalkGraph(
+  layout: OfficeLayout,
+): OfficeLayout["walkGraph"] {
+  const nodes: Vec3[] = [],
+    edges: [number, number][] = [],
+    indices = new Map<string, number>();
+  for (
+    let x = layout.bounds.x + 0.5;
+    x < layout.bounds.x + layout.bounds.width;
+    x += 0.5
+  )
+    for (
+      let z = layout.bounds.z + 0.5;
+      z < layout.bounds.z + layout.bounds.depth;
+      z += 0.5
+    ) {
+      const p: Vec3 = [x, 0, z];
+      if (!isWalkable(layout, p)) continue;
+      indices.set(`${x},${z}`, nodes.length);
+      nodes.push(p);
+    }
+  nodes.forEach((p, i) => {
+    for (const [dx, dz] of [
+      [0.5, 0],
+      [0, 0.5],
+    ]) {
+      const j = indices.get(`${p[0] + dx},${p[2] + dz}`);
+      if (j !== undefined) edges.push([i, j]);
+    }
+  });
+  return { nodes, edges };
+}
+const graphCache = new WeakMap<
+  OfficeLayout,
+  { indices: Map<string, number>; neighbors: Map<number, number[]> }
+>();
 export function findRoute(
   l: OfficeLayout,
   from: Vec3,
@@ -30,37 +66,48 @@ export function findRoute(
   }
   const key = `${from.join()}:${to.join()}`;
   if (routes.has(key)) return routes.get(key)!;
-  const grid = (p: Vec3) => [Math.round(p[0] * 2), Math.round(p[2] * 2)];
-  const start = grid(from),
-    end = grid(to),
-    id = (p: number[]) => p.join(",");
+  let graph = graphCache.get(l);
+  if (!graph) {
+    const indices = new Map(
+      l.walkGraph.nodes.map((p, i) => [`${p[0]},${p[2]}`, i]),
+    );
+    const neighbors = new Map<number, number[]>();
+    for (const [a, b] of l.walkGraph.edges) {
+      if (!neighbors.has(a)) neighbors.set(a, []);
+      if (!neighbors.has(b)) neighbors.set(b, []);
+      neighbors.get(a)!.push(b);
+      neighbors.get(b)!.push(a);
+    }
+    graph = { indices, neighbors };
+    graphCache.set(l, graph);
+  }
+  const id = (p: Vec3) =>
+    `${Math.round(p[0] * 2) / 2},${Math.round(p[2] * 2) / 2}`;
+  const start = graph.indices.get(id(from)),
+    end = graph.indices.get(id(to));
+  if (start === undefined || end === undefined)
+    throw new Error(`No office route endpoint: ${key}`);
   const queue = [start],
-    prev = new Map<string, number[] | null>([[id(start), null]]);
+    prev = new Map<number, number | null>([[start, null]]);
   let found = false;
   for (let cursor = 0; cursor < queue.length; cursor++) {
     const p = queue[cursor];
-    if (id(p) === id(end)) {
+    if (p === end) {
       found = true;
       break;
     }
-    for (const [dx, dz] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      const q = [p[0] + dx, p[1] + dz];
-      if (prev.has(id(q)) || !isWalkable(l, [q[0] / 2, 0, q[1] / 2])) continue;
-      prev.set(id(q), p);
+    for (const q of graph.neighbors.get(p) ?? []) {
+      if (prev.has(q)) continue;
+      prev.set(q, p);
       queue.push(q);
     }
   }
   if (!found) throw new Error(`No office route: ${key}`);
   const path: Vec3[] = [];
-  let p: number[] | null = end;
-  while (p) {
-    path.unshift([p[0] / 2, 0, p[1] / 2]);
-    p = prev.get(id(p)) ?? null;
+  let p: number | null = end;
+  while (p !== null) {
+    path.unshift(l.walkGraph.nodes[p]);
+    p = prev.get(p) ?? null;
   }
   path[0] = from;
   path[path.length - 1] = to;

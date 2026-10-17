@@ -73,6 +73,19 @@ test("reconnect: selection and camera survive outage, no arrival backlog or dupl
     .getByLabel("Office roster")
     .getByRole("button", { name: /Worker Task worker-0/ })
     .click();
+  await expect
+    .poll(() =>
+      page
+        .locator(".officeCanvas canvas")
+        .evaluate((c) => (c as HTMLCanvasElement).width),
+    )
+    .toBeLessThan(650);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   const before = await page
     .getByLabel("3D office", { exact: true })
     .getAttribute("data-pose");

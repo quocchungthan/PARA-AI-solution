@@ -29,7 +29,9 @@ export function FloorSelector({
               {f.counts.healthIssues
                 ? ` · ${f.counts.healthIssues} health`
                 : ""}
-              {f.counts.failedHandoffs?` · ${f.counts.failedHandoffs} handoff issues`:''}
+              {f.counts.failedHandoffs
+                ? ` · ${f.counts.failedHandoffs} handoff issues`
+                : ""}
               {!f.active ? " · completed" : ""}
             </option>
           ))}

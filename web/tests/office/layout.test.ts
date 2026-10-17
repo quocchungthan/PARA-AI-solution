@@ -4,6 +4,7 @@ import { OFFICE_LAYOUT } from "../../src/office/layout";
 import { findRoute, isWalkable } from "../../src/office/routes";
 test("seats are unique, reserved leads remain separate, all destinations route without obstacles", () => {
   const l = OFFICE_LAYOUT;
+  assert.ok(l.walkGraph.nodes.length>0,'Explicit circulation graph must be available to scene consumers');assert.ok(l.walkGraph.edges.length>0);
   assert.ok(l.seats.filter((s) => s.id.startsWith("team")).length >= 16);
   assert.equal(new Set(l.seats.map((s) => s.id)).size, l.seats.length);
   assert.equal(

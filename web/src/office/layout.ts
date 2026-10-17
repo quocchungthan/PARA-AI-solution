@@ -1,4 +1,5 @@
 import type { OfficeRole, Vec3 } from "./types";
+import { createWalkGraph } from "./routes";
 export type Rect = { x: number; z: number; width: number; depth: number };
 export type Room = Rect & { id: string; name: string };
 export type Seat = {
@@ -172,3 +173,4 @@ export const OFFICE_LAYOUT: OfficeLayout = {
   ],
   walkGraph: { nodes: [], edges: [] },
 };
+OFFICE_LAYOUT.walkGraph = createWalkGraph(OFFICE_LAYOUT);
