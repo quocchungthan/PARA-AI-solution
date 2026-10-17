@@ -1,0 +1,11 @@
+import {useMemo} from 'react';import type {OfficeRole} from '../types';import {box,VoxelBatch,type Voxel} from './resources';
+export type CharacterKind='human'|'assistant'|'lead'|'worker';
+export const identityHash=(seed:string)=>[...seed].reduce((h,c)=>(Math.imul(h,31)+c.charCodeAt(0))>>>0,7);
+export function Character({identitySeed,role,kind,pose,onSelect}:{identitySeed:string;role:OfficeRole;kind:CharacterKind;pose:'seated'|'standing';onSelect:()=>void}){const voxels=useMemo(()=>{const v:Voxel[]=[];const n=identityHash(identitySeed),skin=['#dfac7f','#c89363','#9c6646','#f1cba7'][n%4],hair=['#302c24','#68482b','#c8984f','#71432d'][n%4];const outfit:Record<OfficeRole,string>={coordinator:'#356e64',researcher:'#d0bea0',coder:'#477aa0',reviewer:'#d5aa4c','functional-reviewer':'#af7054',hr:'#b9c7ab','scrum-master':'#6d925d',unknown:'#8d9294'};const shirt=kind==='human'?'#354f68':outfit[role];
+ box(v,[0,1.12,0],[.68,.68,.4],shirt);box(v,[0,1.53,.02],[.2,.16,.2],skin);box(v,[0,1.88,0],[.66,.62,.6],skin);
+ box(v,[0,2.23,-.03],[.72,.18,.65],hair);box(v,[-.29,2.03,-.12],[.15,.3,.46],hair);box(v,[.27,2.1,-.12],[.15,.24,.46],hair);box(v,[0,2.13,-.31],[.64,.3,.12],hair);box(v,[-.17,2.3,-.1],[.32,.12,.4],hair);
+ for(const x of [-.14,.14])box(v,[x,1.93,.307],[.065,.075,.025],'#292d28');box(v,[0,1.81,.33],[.1,.1,.07],skin);box(v,[0,1.72,.309],[.16,.035,.02],'#775541');
+ if(role==='reviewer'||role==='researcher'){for(const x of [-.16,.16]){box(v,[x,1.93,.329],[.23,.17,.035],'#394437');box(v,[x,1.94,.351],[.15,.1,.02],skin)}box(v,[0,1.94,.34],[.1,.04,.02],'#394437')}
+ if(kind==='assistant')box(v,[0,1.26,.22],[.07,.34,.05],'#e6d3a3');if(kind==='lead')box(v,[.2,1.35,.22],[.1,.13,.025],'#d8e3ce');
+ for(const x of [-.22,.22]){box(v,[x,.75,pose==='seated'?.21:0],[.24,.23,pose==='seated'?.65:.25],'#37463f');box(v,[x,pose==='seated'?.4:.43,pose==='seated'?.4:0],[.22,pose==='seated'?.6:.67,.23],'#37463f');box(v,[x,.14,pose==='seated'?.48:.08],[.27,.18,.38],'#293832')}
+ for(const x of [-.44,.44]){box(v,[x,1.19,.04],[.2,.43,.23],shirt);box(v,[x,1.01,.27],[.2,.19,.43],shirt);box(v,[x,1.02,.52],[.19,.16,.18],skin)}return v},[identitySeed,role,kind,pose]);return <group onClick={e=>{e.stopPropagation();if(e.delta<=4)onSelect()}}><VoxelBatch voxels={voxels}/></group>}
