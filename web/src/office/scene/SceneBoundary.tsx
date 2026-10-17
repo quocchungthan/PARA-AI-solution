@@ -1,0 +1,2 @@
+import {Component,type ReactNode} from 'react';
+export class SceneBoundary extends Component<{children:ReactNode;onRetry:()=>void},{failed:boolean}>{state={failed:false};static getDerivedStateFromError(){return {failed:true}}render(){return this.state.failed?<div className="officeFallback" role="status"><strong>3D office unavailable</strong><p>Session summaries and Graph remain available.</p><button onClick={this.props.onRetry}>Retry 3D office</button></div>:this.props.children}}
