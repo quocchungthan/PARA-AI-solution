@@ -88,7 +88,8 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
             key={`${props.floor.rootId}:${generation}`}
             orthographic
             camera={{ position: [-26, 28, 40], near: 0.1, far: 180, zoom: 15 }}
-            dpr={[1, 1.5]}
+            // Supersample standard displays; cap high-density screens at 2x.
+            dpr={[1.5, 2]}
             shadows
             gl={{ antialias: true, alpha: false }}
             fallback={
