@@ -1,6 +1,7 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
-import { sampleWorkPose } from "./motion";
+import type { Group } from "three";
+import { sampleCharacterPose } from "./motion";
 import type { OfficeRole } from "../types";
 import { box, RiggedBatch, type Voxel, type RigPart } from "./resources";
 export type CharacterKind = "human" | "assistant" | "lead" | "worker";
@@ -15,6 +16,7 @@ export function Character({
   activity = "waiting",
   reducedMotion = false,
   rest = false,
+  walking,
 }: {
   identitySeed: string;
   role: OfficeRole;
@@ -24,26 +26,24 @@ export function Character({
   activity?: string;
   reducedMotion?: boolean;
   rest?: boolean;
+  walking?: RefObject<boolean>;
 }) {
-  const angles = useRef([0, 0, 0, 0]);
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime * 1000;
-    const moving = pose === "standing";
-    const animate = !reducedMotion && kind !== "human";
-    const work =
-      animate && activity === "working" && !moving
-        ? sampleWorkPose(role, t)
-        : { head: 0, leftArm: 0, rightArm: 0 };
-    angles.current[1] = work.head;
-    angles.current[2] =
-      work.leftArm +
-      (animate && moving
-        ? Math.sin(t * 0.008) * 0.15
-        : animate && rest
-          ? -0.25 + Math.sin(t * 0.001) * 0.05
-          : 0);
-    angles.current[3] =
-      work.rightArm + (animate && moving ? -Math.sin(t * 0.008) * 0.15 : 0);
+  const angles = useRef([0, 0, 0, 0, 0, 0]);
+  const body = useRef<Group>(null);
+  const seed = useMemo(() => identityHash(identitySeed), [identitySeed]);
+  useFrame(({ clock }, delta) => {
+    const motion = sampleCharacterPose(role, clock.elapsedTime * 1000, {
+      activity: pose === "standing" ? "waiting" : activity,
+      seed, rest: rest && pose === "seated",
+      walking: walking?.current ?? pose === "standing",
+      reducedMotion, human: kind === "human",
+    });
+    const target = [0, motion.head, motion.leftArm, motion.rightArm, motion.leftLeg, motion.rightLeg];
+    const blend = reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) * 12);
+    for (let i = 0; i < target.length; i++)
+      angles.current[i] += (target[i] - angles.current[i]) * blend;
+    if (body.current)
+      body.current.position.y += (motion.breath - body.current.position.y) * blend;
   });
   const voxels = useMemo(() => {
     const v: Voxel[] = [];
@@ -130,13 +130,21 @@ export function Character({
             p.position[2],
           ] as const,
         }));
+    const leg = (side: number) =>
+      v.filter((p) => p.position[1] < 0.9 && p.position[0] === side)
+        .map((p) => ({
+          ...p,
+          position: [p.position[0] - side, p.position[1] - 0.85, p.position[2]] as const,
+        }));
     return {
       body: v.filter(
-        (p) => p.position[1] <= 1.55 && Math.abs(p.position[0]) !== 0.44,
+        (p) => p.position[1] >= 0.9 && p.position[1] <= 1.55 && Math.abs(p.position[0]) !== 0.44,
       ),
       head,
       left: arm(-0.44),
       right: arm(0.44),
+      leftLeg: leg(-0.22),
+      rightLeg: leg(0.22),
     };
   }, [identitySeed, role, kind, pose, rest]);
   const parts = useMemo<readonly RigPart[]>(
@@ -145,11 +153,14 @@ export function Character({
       { voxels: voxels.head, pivot: [0, 1.7, 0], axis: "y" },
       { voxels: voxels.left, pivot: [-0.44, 1.4, 0], axis: "x" },
       { voxels: voxels.right, pivot: [0.44, 1.4, 0], axis: "x" },
+      { voxels: voxels.leftLeg, pivot: [-0.22, 0.85, 0], axis: "x" },
+      { voxels: voxels.rightLeg, pivot: [0.22, 0.85, 0], axis: "x" },
     ],
     [voxels],
   );
   return (
     <group
+      ref={body}
       onClick={(e) => {
         e.stopPropagation();
         if (e.delta <= 4) onSelect();

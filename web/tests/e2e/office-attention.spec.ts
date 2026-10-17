@@ -66,6 +66,9 @@ test("reconnect: selection and camera survive outage, no arrival backlog or dupl
   await expect(page.locator(".officeCanvas canvas")).toBeVisible({
     timeout: 20000,
   });
+  const fullWidth = await page.locator(".officeCanvas canvas").evaluate(
+    (c) => (c as HTMLCanvasElement).width,
+  );
   await page
     .getByRole("button", { name: "Focus Research", exact: true })
     .click();
@@ -79,7 +82,7 @@ test("reconnect: selection and camera survive outage, no arrival backlog or dupl
         .locator(".officeCanvas canvas")
         .evaluate((c) => (c as HTMLCanvasElement).width),
     )
-    .toBeLessThan(650);
+    .toBeLessThan(fullWidth);
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>

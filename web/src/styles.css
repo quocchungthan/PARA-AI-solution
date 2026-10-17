@@ -138,9 +138,13 @@ main { max-width:1640px; margin:0 auto; padding:22px 28px 40px; }
 .glowCard > .border-glow-inner { min-width:0; overflow:visible; border-radius:inherit; }
 .agentGlow.border-glow-card { border-color:var(--border); }
 
-/* Overview: orchestration left, logs right */
+/* Overview: Graph beside logs; Office spans the content width. */
 .overview { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(360px,1fr); gap:18px; height:calc(100vh - 110px); min-height:560px; }
 .overview > * { min-height:0; }
+@media (min-width:900px) {
+  .overview.officeOverview { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(560px,calc(100dvh - 110px)) 300px; height:auto; min-height:0; }
+  .officeOverview > .console { height:300px; }
+}
 
 /* ---------- agent glyph ---------- */
 .glyph { display:grid; place-items:center; flex:none; color:var(--c); background:color-mix(in srgb, var(--c) 14%, transparent); border:1px solid color-mix(in srgb, var(--c) 30%, transparent); }

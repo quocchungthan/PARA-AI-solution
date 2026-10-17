@@ -26,6 +26,9 @@ test("release: idle pantry, actual walking, selected-worker and fallback evidenc
   await expect
     .poll(() => worker.evaluate((el) => el.style.transform))
     .not.toBe(transform);
+  const fullWidth = await page.locator(".officeCanvas canvas").evaluate(
+    (c) => (c as HTMLCanvasElement).width,
+  );
   await page
     .getByLabel("Office roster")
     .getByRole("button", { name: /Worker Task worker-0/ })
@@ -36,7 +39,7 @@ test("release: idle pantry, actual walking, selected-worker and fallback evidenc
         .locator(".officeCanvas canvas")
         .evaluate((c) => (c as HTMLCanvasElement).width),
     )
-    .toBeLessThan(650);
+    .toBeLessThan(fullWidth);
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useLayoutEffect, type MutableRefObject } from "react";
+import { useMemo, useRef, useLayoutEffect, useState, type MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Group } from "three";
 import type { OfficeCanvasProps } from "./OfficeCanvas";
@@ -146,6 +146,8 @@ function Actor({
   const initial = useRef(a.position);
   const visit = useRef<{ path: readonly Vec3[]; started: number } | null>(null);
   const target = useRef(a.position);
+  const walking = useRef(false);
+  const [visiting, setVisiting] = useState(false);
   const path = useMemo(
     () =>
       a.worker
@@ -184,6 +186,7 @@ function Actor({
     visit.current = props.reducedMotion
       ? null
       : { path: findRoute(l, from, a.position), started: Date.now() };
+    setVisiting(!!visit.current);
     if (props.reducedMotion) group.current!.position.set(...a.position);
   }, [a.position, props.reducedMotion]);
   useFrame(() => {
@@ -192,6 +195,7 @@ function Actor({
     const worker = a.worker;
     const moving =
       worker && (worker.phase === "entering" || worker.phase === "leaving");
+    walking.current = false;
     if (moving) {
       const sampled = samplePath(
         path,
@@ -201,6 +205,7 @@ function Actor({
       );
       g.position.set(...sampled.position);
       g.rotation.y = sampled.done ? a.rotation : sampled.heading;
+      walking.current = !sampled.done && !props.reducedMotion;
     } else if (visit.current) {
       const sampled = samplePath(
         visit.current.path,
@@ -210,15 +215,18 @@ function Actor({
       );
       g.position.set(...sampled.position);
       g.rotation.y = sampled.done ? a.rotation : sampled.heading;
-      if (sampled.done) visit.current = null;
+      walking.current = !sampled.done && !props.reducedMotion;
+      if (sampled.done) {
+        visit.current = null;
+        setVisiting(false);
+      }
     } else {
       g.position.set(...a.position);
       g.rotation.y = a.rotation;
     }
   });
   const moving =
-    !!a.worker &&
-    ["entering", "leaving"].includes(a.worker.phase) &&
+    (visiting || (!!a.worker && ["entering", "leaving"].includes(a.worker.phase))) &&
     !props.reducedMotion;
   return (
     <group ref={group}>
@@ -230,6 +238,7 @@ function Actor({
         activity={a.status}
         reducedMotion={props.reducedMotion}
         rest={!!a.rest}
+        walking={walking}
         onSelect={() => onSelect(a.selection)}
       />
     </group>

@@ -10,6 +10,9 @@ test("camera: opening details from Home keeps the whole floor framed", async ({
     timeout: 20000,
   });
   await page.getByRole("button", { name: "Home view", exact: true }).click();
+  const fullWidth = await page.locator(".officeCanvas canvas").evaluate(
+    (c) => (c as HTMLCanvasElement).width,
+  );
   await page
     .getByRole("button", { name: "Engineering lead", exact: true })
     .click();
@@ -19,7 +22,7 @@ test("camera: opening details from Home keeps the whole floor framed", async ({
         .locator(".officeCanvas canvas")
         .evaluate((c) => (c as HTMLCanvasElement).width),
     )
-    .toBeLessThan(650);
+    .toBeLessThan(fullWidth);
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>

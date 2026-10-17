@@ -496,7 +496,7 @@
   border-radius: 0;
 }
 @media (max-width: 1200px) {
-  .orchestrationPanel {
+  :where(.overview:not(.officeOverview)) .orchestrationPanel {
     min-height: 760px !important;
   }
   .officeSceneRegion {

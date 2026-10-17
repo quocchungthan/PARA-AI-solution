@@ -1,9 +1,11 @@
-import { signal } from "@preact/signals-react";
 import { Network } from "../Network";
 import { OfficePanel } from "./OfficePanel";
 import "./office.css";
-const view = signal<"office" | "graph">("office");
-export function OrchestrationPanel() {
+export type OrchestrationView = "office" | "graph";
+export function OrchestrationPanel({ view, onViewChange }: {
+  view: OrchestrationView;
+  onViewChange: (view: OrchestrationView) => void;
+}) {
   return (
     <section className="panel orchestrationPanel" aria-label="Orchestration">
       <div className="officeHeading">
@@ -15,20 +17,20 @@ export function OrchestrationPanel() {
         </div>
         <div className="officeView" aria-label="Orchestration view">
           <button
-            aria-pressed={view.value === "office"}
-            onClick={() => (view.value = "office")}
+            aria-pressed={view === "office"}
+            onClick={() => onViewChange("office")}
           >
             Office
           </button>
           <button
-            aria-pressed={view.value === "graph"}
-            onClick={() => (view.value = "graph")}
+            aria-pressed={view === "graph"}
+            onClick={() => onViewChange("graph")}
           >
             Graph
           </button>
         </div>
       </div>
-      {view.value === "office" ? (
+      {view === "office" ? (
         <OfficePanel />
       ) : (
         <div className="officeGraph">
