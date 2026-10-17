@@ -1,0 +1,74 @@
+import type { OfficeModel, OfficeEvent } from "./types";
+export function collectOfficeEvents(
+  previous: OfficeModel | null,
+  next: OfficeModel,
+  floorId: string,
+  nowMs: number,
+): readonly OfficeEvent[] {
+  if (!previous) return [];
+  const floor = next.floors.find((f) => f.rootId === floorId);
+  if (!floor) return [];
+  const events: OfficeEvent[] = [];
+  const reported = new Set<string>();
+  function report(sessionId: string, originId: string, delegationKey: string) {
+    const key = JSON.stringify([sessionId, originId]);
+    if (reported.has(key)) return;
+    reported.add(key);
+    events.push({
+      id: `report:${key}:${nowMs}`,
+      floorId,
+      sessionId,
+      originId,
+      delegationKey,
+      kind: "report",
+      createdAt: nowMs,
+    });
+  }
+  for (const id of floor.sessionIds) {
+    const s = next.sessionsById.get(id)!,
+      before = previous.sessionsById.get(id);
+    if (
+      !before &&
+      id !== floorId &&
+      s.registered !== false &&
+      s.state !== "done"
+    )
+      events.push({
+        id: `arrive:${id}:${nowMs}`,
+        floorId,
+        sessionId: id,
+        kind: "arrive",
+        createdAt: nowMs,
+      });
+    if (before?.state !== "done" && before && s.state === "done")
+      for (const d of next.delegations)
+        if (
+          d.targetId === id &&
+          floor.sessionIds.includes(d.originId) &&
+          ["assigned", "result_fed"].includes(d.status)
+        )
+          report(id, d.originId, d.key);
+  }
+  const old = new Map(previous.delegations.map((d) => [d.key, d]));
+  for (const d of next.delegations) {
+    if (
+      !floor.sessionIds.includes(d.originId) ||
+      !next.sessionsById.has(d.targetId)
+    )
+      continue;
+    const before = old.get(d.key);
+    if (before?.status === d.status) continue;
+    if (d.status === "result_fed") report(d.targetId, d.originId, d.key);
+    else if (d.status === "assigned")
+      events.push({
+        id: `${d.key}:${d.status}:${nowMs}`,
+        floorId,
+        kind: "handoff",
+        sessionId: d.targetId,
+        originId: d.originId,
+        delegationKey: d.key,
+        createdAt: nowMs,
+      });
+  }
+  return events;
+}

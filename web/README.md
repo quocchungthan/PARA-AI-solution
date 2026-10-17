@@ -4,6 +4,38 @@ Reusable UI kit extracted from **PARA Bridge**: dark/light Graphite & Ice theme 
 
 ---
 
+## Agent office dashboard
+
+The dashboard's Overview opens **Office** by default. **Graph** keeps the existing orchestration network available. Botanical Studio is a procedural 3D voxel office with the same light/dark switch as the dashboard; it is dashboard code, separate from the published UI-kit entry points.
+
+- A floor is a registered main coordinator conversation plus its observed delegated descendants. Select a conversation from the floor selector; enable **Completed** for finished conversations. A completed root with unfinished delegated work stays active.
+- **You** are the visual manager. The executive assistant represents the root coordinator session. Six permanent department leads summarize research, implementation, code review, functional review, agent/tool capabilities (HR), and team health. They are representatives, not extra backend agent sessions.
+- Each unfinished delegated session can have a temporary worker. At most ten temporary workers appear on one floor; all sessions, including excess work and completed results, remain in the textual roster. Selecting an excess worker reveals it. This is a display limit and never limits Bridge execution.
+- Click an actor or use its roster button for a nonmodal observation panel. It shows source state, delegators, questions, needs, recent progress, results and handoffs. **Open session** opens the existing inspector/reply drawer. The office itself has no assignment or reply form.
+- Human-input, health, and failed/limited handoff notices have separate meanings. They wait for your click and never switch floor/camera automatically. Dismissing a notice hides its presentation; the underlying floor counts and session details remain visible.
+- Drag the canvas to pan, scroll to zoom, click room labels/controls to focus, and use **Home** to fit the floor. V1 keeps the approved orthographic angle. Scene geometry and camera policy are separate for future orbit support; free rotation is not enabled.
+- Buttons, floor selection and the full roster work with a keyboard. Escape closes focused observation details and returns focus. Reduced motion suppresses walking and fidgeting while preserving status text. Under 900 CSS pixels, summaries load first; **Show 3D office** opts into a compact preview.
+- When rendering/chunk loading fails, keep using summaries or **Graph**; **Retry 3D office** recreates the scene. Graphics context loss preserves selection. Bridge outages use the existing offline screen, then restore surviving context without replaying the gap.
+
+Snapshots are authoritative. Animations illustrate observed arrivals and actual delegation/report relationships; the two-second poll can miss intermediate events. Waiting/blocked workers do not become idle lounge characters. Cycles, missing ancestors, unknown roles and unregistered sessions are disclosed in **Ungrouped sessions** rather than assigned invented ownership. A shared worker can legitimately belong to more than one floor.
+
+Develop and verify with Node 24:
+
+```sh
+npm ci
+npx playwright install chromium
+npm run test:office
+npm run test:e2e:office
+npm run build
+npm run build:ui
+```
+
+Browser tests intercept the local Bridge API with synthetic fixtures and reject writes. To smoke-test built assets below a deployment prefix, run `OFFICE_PRODUCTION=1 npm run test:e2e:office -- --grep 'production:'` (PowerShell: `$env:OFFICE_PRODUCTION='1'` first). The browser harness defaults to deterministic software graphics; `OFFICE_GPU_PROFILE=1` uses an installed Edge browser's normal graphics path for a local performance measurement. The verification-only `office-checks.yml` workflow never publishes or deploys.
+
+Browser screenshots and frame timings are written to `test-results/office-evidence/`, which is ignored by Git and included in CI failure artifacts.
+
+---
+
 ## 1. Install from GitHub Packages
 
 Configure `@quocchungthan` to use GitHub Packages in your project's `.npmrc`:

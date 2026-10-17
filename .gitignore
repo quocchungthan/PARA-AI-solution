@@ -11,3 +11,5 @@ recordings/
 review-output/
 dist/
 dist-ui/
+web/test-results/
+web/playwright-report/

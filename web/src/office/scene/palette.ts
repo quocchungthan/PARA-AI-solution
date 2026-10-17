@@ -1,0 +1,31 @@
+export type BotanicalPalette = ReturnType<typeof botanicalPalette>;
+export function botanicalPalette(theme: "light" | "dark") {
+  const dark = theme === "dark";
+  return {
+    background: dark ? "#172420" : "#f2f5ef",
+    floor: dark ? "#494d40" : "#cfd4bf",
+    tile: dark ? "#545849" : "#e3e1cb",
+    walls: dark ? "#697362" : "#e9e9d8",
+    trim: dark ? "#84957c" : "#a4b29a",
+    wood: dark ? "#896342" : "#c89d64",
+    woodLight: dark ? "#a47e50" : "#dfbc83",
+    fabric: dark ? "#547568" : "#779d88",
+    fabricDark: dark ? "#344e46" : "#426e60",
+    leaves: dark ? "#739053" : "#71904c",
+    leafLight: dark ? "#9aaf69" : "#9cb967",
+    pot: dark ? "#99856b" : "#d6b486",
+    screen: dark ? "#6ca69b" : "#86b7b0",
+    ink: dark ? "#192a2b" : "#304b4b",
+    paper: dark ? "#b8bda7" : "#f4f0d8",
+    labels: dark ? "#edf3e8" : "#243c32",
+    working: "#74b89b",
+    waiting: "#c6ad6e",
+    attention: "#e2a354",
+    blocked: "#cf8279",
+    ambient: dark ? 1.5 : 2.1,
+    key: dark ? 2.4 : 3.4,
+    keyColor: dark ? "#e7dab7" : "#fff1d2",
+    taskColor: "#ffd190",
+    taskIntensity: dark ? 7 : 1.5,
+  };
+}
