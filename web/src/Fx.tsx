@@ -1,9 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { agentOf, changedAt, clock, fetchInspection, needsHumanInput, openSession, sendHumanReply, sessions, type Inspection } from "./store";
 import { STATE_COLOR, ago, roleOf, stateLabel } from "./util";
 import { AgentGlyph } from "./Glyph";
-
-const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Live look into the session's own Copilot event log, refreshed while the drawer is open.
 function InspectorPanel({ sessionId }: { sessionId: string }) {
@@ -55,24 +53,7 @@ function InspectorPanel({ sessionId }: { sessionId: string }) {
   );
 }
 
-// Tweens from the previous value to the new one so KPI changes are visible.
-export function AnimatedNumber({ value }: { value: number }) {
-  const [shown, setShown] = useState(value);
-  const from = useRef(value);
-  useEffect(() => {
-    if (reduced() || from.current === value) { from.current = value; setShown(value); return; }
-    const start = performance.now(), a = from.current, d = 600;
-    let raf = 0;
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / d), e = 1 - Math.pow(1 - p, 3);
-      setShown(Math.round(a + (value - a) * e));
-      if (p < 1) raf = requestAnimationFrame(tick); else from.current = value;
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value]);
-  return <>{shown}</>;
-}
+export { AnimatedNumber } from "./Effects";
 
 export const isFresh = (id: string) => clock.value.getTime() - (changedAt.value[id] ?? 0) < 4000;
 

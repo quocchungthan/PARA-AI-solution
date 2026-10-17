@@ -33,13 +33,20 @@ On the AFFiNE **Tools** page (it doesn't need to be in any collection), add a ro
 
 Valid categories: `SearchCollect`, `ConvertTransformCompose`, `ObserveWatching`, `CalculatingAnalysing`.
 
+## Reusable UI Package (`@quocchungthan/para-ui`) & Seafile Custom CSS
+
+`npm run build:ui` in `web/` builds the standalone UI package and Seafile Custom CSS into `web/dist-ui/` (kept separate from `web/dist/` so `para-bridge` deploys untouched). In CI (`.github/workflows/notify-pages.yml`):
+- Publishes **`@quocchungthan/para-ui`** to your personal GitHub Packages tab (`para-ui.css`, `para-ui.js`, `para-ui.umd.js`, `react.js`, `index.d.ts`, `seafile-custom.css`).
+- Uploads the **`seafile-custom-css`** artifact (`seafile-custom.css` and `seafile-custom.min.css`) on the workflow run (and outputs a copyable block in the Actions summary) so you can paste it directly into self-hosted **Seafile** (**System Admin → Settings / Branding → Custom CSS** or `BRANDING_CSS = 'custom/custom.css'` in `conf/seahub_settings.py`).
+
 ## Develop
 
 - UI (React + Vite + signals): `cd web && npm install && npm run dev`, then open http://localhost:5173/.
-- Effects from [React Bits](https://reactbits.dev) (ShinyText, MetallicPaint, ClickSpark, FallingText; TS-CSS flavor) are copied into `web/src/reactbits/` and wired up in `web/src/Effects.tsx`. `ClickSpark` has a small local `selector` prop so only buttons spark. FallingText (with `matter-js`) loads only when the Bridge is offline.
+- Build the UI package & Seafile CSS locally: `cd web && npm run build:ui` (outputs to `web/dist-ui/`).
+- Effects from [React Bits](https://reactbits.dev) (ShinyText, MetallicPaint, ClickSpark, FallingText; TS-CSS flavor) are copied into `web/src/reactbits/` and wired up in `web/src/Effects.tsx` and `web/src/ui/`. `ClickSpark` has a `selector` prop so only buttons/links spark. FallingText (with `matter-js`) loads only when the Bridge is offline.
 - The public `quocchungthan.github.io` repo builds and publishes all three tool UIs.
-- `notify-pages.yml` triggers a redeploy with the `PAGES_DISPATCH_TOKEN` secret (stored in the `github-pages` environment).
-- Helper scripts are in `C:\Users\727124\src\prompts`:
+- `notify-pages.yml` builds and publishes `@quocchungthan/para-ui`, uploads the `seafile-custom-css` artifact, and triggers a Pages redeploy with the `PAGES_DISPATCH_TOKEN` secret (stored in the `github-pages` environment).
+- Helper scripts are in `C:/Users/727124/src/prompts`:
   - `para-start-session.sh <agent>`
   - `para-run-bridge.sh [--once]`
 

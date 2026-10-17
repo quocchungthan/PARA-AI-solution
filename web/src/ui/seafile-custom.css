@@ -1,0 +1,602 @@
+/**
+ * PARA UI — Custom CSS Theme for Self-Hosted Seafile (Seahub v11 / v12 / v13)
+ * Source: https://quocchungthan.github.io/para-bridge/ui/seafile-custom.css
+ *
+ * HOW TO APPLY IN SEAFILE:
+ *
+ * Option A — Via Seafile Web UI (Recommended, takes effect immediately):
+ *   1. Sign in to your Seafile instance as a System Administrator.
+ *   2. Open "System Admin" (top-right avatar menu) -> "Settings" (or "Branding").
+ *   3. Enable "Custom CSS" (ENABLE_BRANDING_CSS) and paste this file's contents
+ *      into the "Custom CSS" text box, then click Save.
+ *
+ * Option B — Via seahub_settings.py (Docker / server file config):
+ *   1. Save this file to: <seafile-data>/seahub-data/custom/custom.css
+ *   2. Add to conf/seahub_settings.py:
+ *        BRANDING_CSS = 'custom/custom.css'
+ *   3. Restart Seafile / Seahub and hard-refresh your browser (Ctrl+F5).
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap");
+
+:root {
+  color-scheme: dark;
+
+  /* PARA Graphite & Ice Design Tokens */
+  --bg: #09090B;
+  --surface: #111215;
+  --panel: rgba(255, 255, 255, 0.03);
+  --panel2: rgba(255, 255, 255, 0.055);
+  --line: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #ECEEF2;
+  --muted: #A0A6B0;
+  --faint: #858D99;
+  --ok: #5DD6A0;
+  --warn: #F5C563;
+  --bad: #F07882;
+  --info: #86BFFA;
+  --ice: #7FB7E8;
+  --ice-ink: #0B1723;
+  --accent: var(--ice);
+  --console: #070709;
+  --shadow: 0 30px 70px -32px rgba(0, 0, 0, 0.9);
+  --glow-a: rgba(200, 210, 225, 0.07);
+  --glow-b: rgba(127, 183, 232, 0.07);
+  --glow-purple: #c084fc;
+  --glow-pink: #f472b6;
+  --glow-sky: #38bdf8;
+  --glass-tint: rgba(17, 18, 22, 0.72);
+  --glass-sheen: rgba(255, 255, 255, 0.08);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+
+  /* Seafile 11 / 12 / 13 Native Variable Overrides */
+  --primary-color: #7FB7E8;
+  --primary-text-color: #0B1723;
+  --primary-color-darken: #5CA2DE;
+  --primary-color-more-darken: #3B88CC;
+  --primary-light-10: rgba(127, 183, 232, 0.12);
+  --primary-light-70: rgba(127, 183, 232, 0.7);
+
+  /* Seafile Community Dark Theme Variables */
+  --main-bg: var(--bg);
+  --dark-bg: var(--surface);
+  --light-bg: var(--panel2);
+  --main-font: var(--text);
+  --light-font: var(--muted);
+  --dark-font: var(--faint);
+  --main-theme: var(--ice);
+  --theme-font: var(--text);
+  --green: var(--ok);
+  --error: var(--bad);
+  --th-color: var(--muted);
+}
+
+/* ---------- PARA Animations & Keyframes ---------- */
+@keyframes para-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes para-slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes para-pop {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes para-highlight {
+  0%, 100% { box-shadow: 0 0 0 2px var(--ice), 0 0 24px -6px var(--ice); }
+  50% { box-shadow: 0 0 0 4px rgba(127, 183, 232, 0.35), 0 0 34px -4px var(--ice); }
+}
+@keyframes para-shiny {
+  0%, 100% { background-position: 200% 50%; }
+  50% { background-position: -100% 50%; }
+}
+@keyframes para-spark-ring {
+  0% { box-shadow: 0 0 0 0 rgba(127, 183, 232, 0.75), 0 0 18px rgba(127, 183, 232, 0.6); }
+  100% { box-shadow: 0 0 0 12px rgba(127, 183, 232, 0), 0 0 0 rgba(127, 183, 232, 0); }
+}
+
+/* ---------- Global Canvas, Typography & Scrollbars ---------- */
+html, body, #wrapper, #main, .main-panel, .cur-view-container, .dir-content-main {
+  color: var(--text) !important;
+  font-family: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--bg) !important;
+  background-image:
+    radial-gradient(1200px 560px at 10% -10%, var(--glow-a), transparent 60%),
+    radial-gradient(1000px 560px at 95% -6%, var(--glow-b), transparent 58%) !important;
+  background-attachment: fixed !important;
+}
+
+code, pre, .CodeMirror, .path-link, .cur-view-path, .dirent-table-container thead th, .table thead th {
+  font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace !important;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+a, .op-target, .grid-file-name-link, .path-link, .a-simulate {
+  color: var(--text);
+  transition: color 0.15s ease;
+}
+a:hover, a:focus, .op-target:hover, .grid-file-name-link:hover, .path-link:hover {
+  color: var(--ice) !important;
+  text-decoration: none;
+}
+
+/* ---------- Top Header & Path Bar (Glassmorphic Sticky Bar) ---------- */
+.top-header,
+.main-panel-north,
+.side-panel-north,
+.cur-view-path,
+.repo-file-list-topbar,
+.sf-md-viewer-topbar-first,
+.sf-md-viewer-topbar-first-narrow,
+.seafile-editor-topbar,
+.seafile-rich-editor-topbar,
+.shared-file-view-md-header,
+.shared-file-view-head,
+.file-view-header {
+  background: color-mix(in srgb, var(--bg) 82%, transparent) !important;
+  backdrop-filter: blur(14px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.4) !important;
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+.cur-view-path:after, .border-left-show:before, .sf-border-bottom {
+  border-color: var(--line) !important;
+}
+
+/* ShinyText metallic sweep on Seafile headings */
+.side-panel-north .sf-heading,
+.top-header .sf-heading,
+.cur-view-path .sf-heading,
+.login-panel .hd,
+.new-narrow-panel .hd {
+  background: linear-gradient(120deg, #A0A6B0 0%, #ECEEF2 42%, #FFFFFF 50%, #7FB7E8 58%, #A0A6B0 100%);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: para-shiny 6s ease-in-out infinite;
+  font-weight: 700 !important;
+  letter-spacing: -0.015em;
+}
+
+/* ---------- Left Sidebar & Navigation Tree ---------- */
+.side-panel,
+.side-nav,
+.side-nav-con,
+.side-panel-center,
+.side-panel-footer,
+.side-nav-footer,
+.side-nav-folded,
+.side-panel .side-nav-folded .side-nav-con,
+.side-nav-folded #files-sub-nav,
+.wiki-side-panel,
+.wiki-side-nav,
+.seafile-editor-side-panel,
+.seafile-editor-module .side-panel {
+  background: var(--surface) !important;
+  border-right: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+.side-panel .side-nav .side-nav-con .nav-item,
+.nav-pills .nav-item {
+  background: transparent !important;
+}
+
+.side-panel .nav-pills .nav-item .nav-link,
+.user-setting-nav .nav-item .nav-link,
+.lib-setting-nav .nav-pills .nav-item .nav-link,
+.share-dialog-side .nav-pills .nav-item .nav-link,
+.side-textnav-tabs .tab a {
+  position: relative;
+  margin: 2px 8px;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+}
+
+.side-panel .nav-pills .nav-item .nav-link:hover,
+.user-setting-nav .nav-item .nav-link:hover,
+.lib-setting-nav .nav-pills .nav-item .nav-link:hover,
+.share-dialog-side .nav-pills .nav-item .nav-link:hover,
+.tree-node-inner-hover,
+.tree-section .tree-section-header:hover,
+.dir-others .dir-others-item:hover {
+  color: var(--text) !important;
+  background: var(--panel2) !important;
+  border-radius: 10px;
+}
+
+.side-panel .nav-pills .nav-item .nav-link.active,
+.user-setting-nav .nav-item.active .nav-link,
+.lib-setting-nav .nav-pills .nav-item .nav-link.active,
+.share-dialog-side .nav-pills .nav-item .nav-link.active,
+.tree-node-hight-light,
+.file-chooser-item .item-active {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--ice) 12%, var(--panel2)) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ice) 28%, transparent) !important;
+  border-radius: 10px !important;
+}
+
+.side-panel .side-nav .side-nav-con .nav-item.active::before,
+.lib-setting-nav .nav-pills .nav-item .nav-link.active:before,
+.share-dialog-side .nav-pills .nav-item .nav-link.active:before,
+.custom-modal .repo-list-item.active:before,
+.file-chooser-item .item-active:before,
+.tree-node-hight-light:before {
+  background-color: var(--ice) !important;
+  box-shadow: 0 0 10px var(--ice);
+  width: 3px !important;
+  border-radius: 3px;
+}
+
+/* ---------- Libraries, File Tables & BorderGlow Hover Rows ---------- */
+.cur-view-content,
+.dirent-table-container,
+.repo-list {
+  animation: para-rise 0.35s both;
+}
+
+table, .table, .dirent-table-container table {
+  background: transparent !important;
+  color: var(--text) !important;
+  border-collapse: separate !important;
+  border-spacing: 0 4px !important;
+}
+
+.table thead th,
+.dirent-table-container thead th,
+.text-wrap table thead th {
+  color: var(--faint) !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-top: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  background: transparent !important;
+}
+
+.table td,
+.dirent-table-container td,
+table.repo-list td {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border-top: 1px solid var(--line) !important;
+  border-bottom: 1px solid var(--line) !important;
+  vertical-align: middle !important;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.2s ease;
+}
+
+.table tbody tr td:first-child,
+.dirent-table-container tbody tr td:first-child {
+  border-left: 3px solid rgba(138, 166, 194, 0.7) !important;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.table tbody tr td:last-child,
+.dirent-table-container tbody tr td:last-child {
+  border-right: 1px solid var(--line) !important;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+/* BorderGlow-inspired hover on file & library rows */
+.table tbody tr:hover td,
+.dirent-table-container tbody tr:hover td,
+.tr-highlight td {
+  background: linear-gradient(90deg, rgba(192, 132, 252, 0.08), rgba(244, 114, 182, 0.06) 50%, rgba(56, 189, 248, 0.08)), var(--panel2) !important;
+  border-top-color: rgba(192, 132, 252, 0.38) !important;
+  border-bottom-color: rgba(56, 189, 248, 0.38) !important;
+}
+
+.table tbody tr:hover td:first-child,
+.dirent-table-container tbody tr:hover td:first-child,
+.tr-highlight td:first-child {
+  border-left-color: var(--glow-purple) !important;
+}
+
+/* PARA Spotlight Highlight on active/selected rows */
+.tr-active td,
+.grid-selected-active {
+  background: color-mix(in srgb, var(--ice) 12%, var(--panel2)) !important;
+  border-color: var(--ice) !important;
+  animation: para-highlight 1.4s ease-in-out 2;
+}
+
+.tr-active td:first-child {
+  border-left: 3px solid var(--ice) !important;
+}
+
+/* ---------- Grid Items, Cards & Wiki Cards (BorderGlow) ---------- */
+.grid-item,
+.wiki-card-item,
+.issue-card {
+  position: relative;
+  border-radius: 16px !important;
+  border: 1px solid var(--border) !important;
+  background: linear-gradient(180deg, var(--panel), rgba(255, 255, 255, 0.01)), var(--surface) !important;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+  animation: para-rise 0.35s both;
+}
+
+.grid-item:hover,
+.wiki-card-item:hover,
+.issue-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(192, 132, 252, 0.55) !important;
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.25),
+    0 18px 38px -18px rgba(192, 132, 252, 0.35),
+    var(--shadow) !important;
+}
+
+.grid-file-img-link .thumbnail {
+  background: var(--panel2) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+}
+
+/* ---------- Action Buttons & ClickSpark Burst ---------- */
+.btn-primary,
+.btn-success,
+.seafile-comment-footer .submit-comment {
+  background: var(--ice) !important;
+  color: var(--ice-ink) !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+  font-size: 12.5px;
+  padding: 6px 14px;
+  box-shadow: 0 0 18px -6px rgba(127, 183, 232, 0.55);
+  transition: background 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease !important;
+}
+
+.btn-primary:not(:disabled):not(.disabled):hover,
+.btn-primary:not(:disabled):not(.disabled):focus,
+.btn-success:hover {
+  background: #A7D1F3 !important;
+  color: var(--ice-ink) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px -4px rgba(127, 183, 232, 0.8) !important;
+}
+
+.btn-secondary,
+.btn-outline-primary,
+.btn-white,
+.tabnav button,
+.repo-file-list-topbar .op-btn,
+.fileinput-button,
+.cur-view-path-btn,
+.op-icon,
+.sf-dropdown-toggle {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+}
+
+.btn-secondary:hover,
+.btn-outline-primary:hover,
+.btn-white:hover,
+.tabnav button:hover,
+.repo-file-list-topbar .op-btn:hover,
+.fileinput-button:hover,
+.cur-view-path-btn:hover,
+.op-icon:hover,
+.sf-dropdown-toggle:hover {
+  background: var(--panel2) !important;
+  border-color: var(--ice) !important;
+  color: var(--text) !important;
+  transform: translateY(-1px);
+}
+
+/* Click-spark pulse on button press */
+.btn-primary:active,
+.btn-secondary:active,
+.btn-outline-primary:active,
+.btn-white:active,
+.op-btn:active,
+.op-icon:active {
+  transform: scale(0.96) !important;
+  animation: para-spark-ring 0.38s ease-out !important;
+}
+
+/* ---------- Modals, Popovers & Dropdown Menus ---------- */
+.modal-content,
+.custom-modal,
+.popover,
+.dropdown-menu,
+.seafile-popover,
+.activity-modifier-selector-container,
+.custom-dropdown-list .custom-dropdown-menu,
+.header-list-container .list-dropdown,
+.comment-dialog {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--shadow), 0 0 0 1px rgba(127, 183, 232, 0.08) !important;
+  animation: para-slide-down 0.2s ease-out;
+}
+
+.modal-header,
+.modal-footer,
+.popover-header,
+.popover-title {
+  background: transparent !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+
+.dropdown-item,
+.option-list li {
+  color: var(--muted) !important;
+  border-radius: 8px;
+  margin: 2px 6px;
+  width: calc(100% - 12px);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus,
+.option-list li:hover {
+  background: color-mix(in srgb, var(--ice) 14%, var(--panel2)) !important;
+  color: var(--text) !important;
+}
+
+/* ---------- Inputs, Search & React-Select ---------- */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+input[type="number"],
+textarea,
+select,
+.form-control,
+.side-search-form .input,
+.login-panel .input,
+.seafile-comment-footer .add-comment-input,
+[class*="-control"] {
+  background-color: var(--panel2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.form-control:focus,
+.side-search-form .input:focus {
+  border-color: var(--ice) !important;
+  outline: 2px solid color-mix(in srgb, var(--ice) 45%, transparent) !important;
+  outline-offset: 1px;
+}
+
+[class*="-menu"] {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+}
+[class*="-singleValue"] { color: var(--text) !important; }
+[class*="-option"] { background-color: transparent !important; color: var(--muted) !important; }
+[class*="-option"]:hover { background-color: var(--panel2) !important; color: var(--text) !important; }
+
+.custom-switch-input:checked ~ .custom-switch-indicator {
+  background: var(--ice) !important;
+}
+
+/* ---------- Notifications, Badges & Toasts ---------- */
+#notifications .num {
+  background: var(--ice) !important;
+  color: var(--ice-ink) !important;
+  font-weight: 700 !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 0 2px var(--bg);
+  animation: para-pop 0.35s ease-out;
+}
+
+#notice-popover li.unread {
+  background: color-mix(in srgb, var(--ice) 9%, transparent) !important;
+  border-left: 3px solid var(--ice) !important;
+}
+
+.seahub-toast-alert-container,
+.messages .info,
+.messages .success,
+.messages .error {
+  border-radius: 14px !important;
+  border: 1px solid color-mix(in srgb, var(--ice) 40%, var(--border)) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow) !important;
+  animation: para-slide-down 0.3s ease-out;
+}
+
+/* ---------- File Details Drawer, Editor & Drop Zone ---------- */
+.cur-view-detail,
+.file-view-content,
+.seafile-editor-main-panel,
+.plain-editor-left-panel,
+.plain-editor-right-panel {
+  background: var(--surface) !important;
+  border-left: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+.article,
+.shared-file-view-body .md-view {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+}
+
+.article pre,
+.CodeMirror {
+  background: var(--console) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+}
+
+.article blockquote {
+  border-left: 3px solid var(--ice) !important;
+  background: var(--panel2) !important;
+  padding: 10px 14px !important;
+  border-radius: 10px;
+  color: var(--muted) !important;
+}
+
+#upload-link-drop-zone {
+  border: 1px dashed var(--ice) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--ice) 8%, var(--panel)) !important;
+}
+
+.upload-progress .progress .progress-bar,
+.progress-bar {
+  background: linear-gradient(90deg, var(--ice), var(--ok)) !important;
+}
+
+/* ---------- Login Panel (PARA Frosted Glass Card) ---------- */
+.login-panel,
+.new-narrow-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px !important;
+  border: 1px solid var(--glass-edge) !important;
+  background: linear-gradient(155deg, var(--glass-sheen), transparent 42%), var(--glass-tint) !important;
+  backdrop-filter: blur(10px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.6) !important;
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 40px 120px -48px rgba(127, 183, 232, 0.35), var(--shadow) !important;
+  color: var(--text) !important;
+  animation: para-rise 0.5s both;
+}
+
+.login-panel::before,
+.new-narrow-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16%;
+  right: 16%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glow-purple), var(--ice), transparent);
+}

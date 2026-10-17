@@ -1,16 +1,71 @@
-name: Notify Pages host
+name: Build UI package & notify Pages host
 
-# Asks quocchungthan/quocchungthan.github.io to rebuild the site when the Bridge UI changes.
+# Builds the reusable @quocchungthan/para-ui npm package + Seafile Custom CSS into web/dist-ui/,
+# publishes @quocchungthan/para-ui to GitHub Packages, uploads seafile-custom-css as a workflow artifact,
+# and asks quocchungthan/quocchungthan.github.io to rebuild Pages for para-bridge.
 # Optional secret PAGES_DISPATCH_TOKEN: fine-grained PAT with Contents:write on quocchungthan.github.io.
 
 on:
   push:
     branches: [main]
-    paths: ["web/**"]
+    paths:
+      - "web/**"
+      - ".github/workflows/notify-pages.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
+  package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@quocchungthan"
+      - name: Install and build UI package + Seafile Custom CSS
+        run: npm ci && npm run build && npm run build:ui
+      - name: Upload Seafile Custom CSS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seafile-custom-css
+          path: |
+            web/dist-ui/seafile-custom.css
+            web/dist-ui/seafile-custom.min.css
+      - name: Write Seafile Custom CSS to job summary
+        run: |
+          {
+            echo "## Seafile Custom CSS Artifact (\`seafile-custom-css\`)"
+            echo ""
+            echo "Download the **\`seafile-custom-css\`** artifact from this workflow run, or copy the CSS directly below and paste it into **Seafile → System Admin → Settings (or Branding) → Custom CSS**:"
+            echo ""
+            echo "| File | Size (bytes) |"
+            echo "|---|---|"
+            echo "| \`seafile-custom.css\` | $(wc -c < dist-ui/seafile-custom.css) |"
+            echo "| \`seafile-custom.min.css\` | $(wc -c < dist-ui/seafile-custom.min.css) |"
+            echo ""
+            echo "<details><summary><b>Click to copy <code>seafile-custom.min.css</code></b></summary>"
+            echo ""
+            echo "\`\`\`css"
+            cat dist-ui/seafile-custom.min.css
+            echo "\`\`\`"
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish @quocchungthan/para-ui to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm publish --ignore-scripts || echo "Package version already published or registry skipped."
+
   notify:
+    needs: package
     runs-on: ubuntu-latest
     environment: github-pages # PAGES_DISPATCH_TOKEN is an environment secret
     steps:

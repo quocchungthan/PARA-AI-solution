@@ -1,4 +1,6 @@
 import { signal, computed, effect } from "@preact/signals-react";
+import { dark, skipSplash as notFound } from "./ui/theme";
+export { dark, notFound };
 
 const history_ = window.history;
 
@@ -25,7 +27,6 @@ export type Snapshot = {
 export const serviceOnline = signal<boolean | null>(null);
 export const snapshot = signal<Snapshot | null>(null);
 export const selectedAgent = signal<string | null>(null);
-export const dark = signal(localStorage.getItem("bridge-theme") !== "light");
 export const clock = signal(new Date());
 export const openSession = signal<string | null>(null);
 export const pollCount = signal(0);
@@ -34,7 +35,6 @@ export type Page = "overview" | "sessions" | "agents";
 export const PAGES: Page[] = ["overview", "sessions", "agents"];
 export const page = signal<Page>("overview");
 // Set when the URL path or #view=<page> is not a route this app knows; renders the 404 page.
-export const notFound = signal(false);
 const knownPath = () => /\/(index\.html)?$/.test(location.pathname);
 
 /** Leave the 404 page for a real page; an unknown path needs a reload at the app root. */

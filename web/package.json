@@ -1,11 +1,44 @@
 {
-  "name": "para-bridge-web",
-  "private": true,
+  "name": "@quocchungthan/para-ui",
   "version": "0.1.0",
+  "description": "PARA Bridge web dashboard and reusable PARA UI kit (animations, highlights, BorderGlow, ClickSpark, ShinyText, LatticeLoader, StatusOrb).",
   "type": "module",
+  "main": "./dist-ui/para-ui.umd.js",
+  "module": "./dist-ui/react.js",
+  "types": "./dist-ui/index.d.ts",
+  "style": "./dist-ui/para-ui.css",
+  "files": [
+    "dist-ui"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist-ui/index.d.ts",
+      "import": "./dist-ui/react.js",
+      "default": "./dist-ui/para-ui.js"
+    },
+    "./vanilla": {
+      "types": "./dist-ui/index.d.ts",
+      "import": "./dist-ui/para-ui.js",
+      "require": "./dist-ui/para-ui.umd.js",
+      "default": "./dist-ui/para-ui.js"
+    },
+    "./style.css": "./dist-ui/para-ui.css",
+    "./para-ui.css": "./dist-ui/para-ui.css",
+    "./seafile.css": "./dist-ui/seafile-custom.css",
+    "./seafile-custom.css": "./dist-ui/seafile-custom.css"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quocchungthan/PARA-AI-solution.git",
+    "directory": "web"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:ui": "node scripts/build-ui.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
