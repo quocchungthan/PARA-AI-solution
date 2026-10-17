@@ -16,16 +16,28 @@ export function OfficeDetails({
   const selection = runtime.selection;
   const ref = useRef<HTMLElement>(null);
   const closeRef = useRef(onClose);
+  const invoker = useRef<HTMLElement | null>(null);
   closeRef.current = onClose;
+  const close = () => {
+    closeRef.current();
+    if (invoker.current?.isConnected)
+      invoker.current.focus({ preventScroll: true });
+    else
+      document
+        .querySelector<HTMLButtonElement>(
+          ".officeView button[aria-pressed=true]",
+        )
+        ?.focus();
+  };
   useEffect(() => {
     if (!selection) return;
-    const invoker = document.activeElement as HTMLElement | null;
+    if (!ref.current?.contains(document.activeElement))
+      invoker.current = document.activeElement as HTMLElement | null;
     ref.current?.focus({ preventScroll: true });
     const escape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && ref.current?.contains(document.activeElement)) {
         e.stopPropagation();
-        closeRef.current();
-        invoker?.focus({ preventScroll: true });
+        close();
       }
     };
     document.addEventListener("keydown", escape, true);
@@ -202,7 +214,7 @@ export function OfficeDetails({
       <button
         className="officeClose"
         aria-label="Close observation"
-        onClick={onClose}
+        onClick={close}
       >
         ×
       </button>

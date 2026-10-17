@@ -108,7 +108,7 @@ export function OfficePanel() {
           )}
           <div className="officeBody">
             <div
-              className="officeSceneRegion"
+              className={`officeSceneRegion${compact && showScene ? " officeCompactScene" : ""}`}
               aria-label="3D office"
               ref={region}
               data-camera="home"

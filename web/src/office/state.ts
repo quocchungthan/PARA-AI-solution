@@ -1,5 +1,5 @@
 import { effect, signal } from "@preact/signals-react";
-import { snapshot, serviceOnline } from "../store";
+import { snapshot, serviceOnline, openSession } from "../store";
 import { deriveOfficeModel, deriveOfficeNotices } from "./model";
 import {
   createOfficeRuntime,
@@ -9,6 +9,10 @@ import {
 import type { OfficeRuntime } from "./types";
 export const officeRuntime = signal<OfficeRuntime | null>(null);
 export const dismissedOfficeNotices = signal<ReadonlySet<string>>(new Set());
+effect(() => {
+  if (openSession.value && officeRuntime.value?.selection)
+    dispatchOffice({ type: "select", selection: null });
+});
 export function dispatchOffice(action: OfficeAction) {
   const current = officeRuntime.peek();
   if (current) officeRuntime.value = reduceOffice(current, action);
