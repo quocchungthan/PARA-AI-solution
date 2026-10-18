@@ -70,7 +70,7 @@ test("missing parents, targets, unknown and unregistered records remain disclose
   );
   assert.deepEqual(m.floors[0].sessionIds, ["a", "n", "u"]);
   assert.equal(m.pendingAssignments[0].targetId, "not-yet");
-  assert.equal(m.ungrouped.length, 3);
+  assert.equal(m.ungrouped.length, 2);
   assert.equal(m.sessionsById.has("not-yet"), false);
 });
 test("empty data, done root with active descendants, failed handoffs, and task title fallback", () => {

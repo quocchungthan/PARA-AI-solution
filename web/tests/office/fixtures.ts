@@ -58,3 +58,12 @@ export const populated = (count = 10) =>
       delegation(`link-${i}`, "main", `worker-${i}`),
     ),
   );
+export const multiConversation = () => snapshot([
+  session("a", "coordinator"), session("b", "coordinator"),
+  session("nested", "coordinator"), session("shared", "reviewer"),
+  session("standalone"), session("custom", "designer"),
+  session("unassigned", "unknown"), session("history", "coder", "done"),
+], [
+  delegation("an", "a", "nested"), delegation("ns", "nested", "shared"),
+  delegation("bs", "b", "shared"), delegation("bs2", "b", "shared"),
+], { roles: ["designer", "researcher"] });

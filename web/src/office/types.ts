@@ -102,3 +102,44 @@ export type OfficeRuntime = {
   floors: ReadonlyMap<string, FloorRuntime>;
   notice?: string;
 };
+
+export type AgentSummary = {
+  agent: string;
+  role: OfficeRole;
+  sessionIds: readonly string[];
+  working: number;
+  waiting: number;
+  unfinished: number;
+  needsHuman: number;
+  healthIssues: number;
+  activity: SessionPresentation["activity"] | "idle";
+};
+export type SharedOfficeModel = {
+  sessionIds: readonly string[];
+  sessionsById: ReadonlyMap<string, Session>;
+  departments: readonly AgentSummary[];
+  counts: OfficeFloor["counts"];
+  delegations: readonly Delegation[];
+  diagnostics: readonly { sessionId?: string; delegationKey?: string; message: string }[];
+  pendingAssignments: readonly { delegationKey: string; targetId: string }[];
+};
+export type SharedOfficeSelection =
+  | null
+  | { kind: "human" }
+  | { kind: "department"; agent: string }
+  | { kind: "session"; sessionId: string };
+export type SharedOfficeEvent = Omit<OfficeEvent, "floorId">;
+export type SharedOfficeRuntime = {
+  model: SharedOfficeModel;
+  selection: SharedOfficeSelection;
+  online: boolean;
+  workers: readonly WorkerSlot[];
+  queue: readonly SharedOfficeEvent[];
+  camera: CameraPose | null;
+};
+export type SharedOfficeNotice = {
+  id: string;
+  sessionId: string | null;
+  kind: "human" | "health" | "handoff";
+  label: string;
+};
