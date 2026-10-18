@@ -1,21 +1,21 @@
 import { effect, signal } from "@preact/signals-react";
 import { snapshot, serviceOnline, openSession } from "../store";
-import { deriveOfficeModel, deriveOfficeNotices } from "./model";
+import { deriveSharedOfficeModel, deriveSharedOfficeNotices } from "./model";
 import {
-  createOfficeRuntime,
-  reduceOffice,
-  type OfficeAction,
+  createSharedOfficeRuntime,
+  reduceSharedOffice,
+  type SharedOfficeAction,
 } from "./runtime";
-import type { OfficeRuntime } from "./types";
-export const officeRuntime = signal<OfficeRuntime | null>(null);
+import type { SharedOfficeRuntime } from "./types";
+export const officeRuntime = signal<SharedOfficeRuntime | null>(null);
 export const dismissedOfficeNotices = signal<ReadonlySet<string>>(new Set());
 effect(() => {
   if (openSession.value && officeRuntime.value?.selection)
     dispatchOffice({ type: "select", selection: null });
 });
-export function dispatchOffice(action: OfficeAction) {
+export function dispatchOffice(action: SharedOfficeAction) {
   const current = officeRuntime.peek();
-  if (current) officeRuntime.value = reduceOffice(current, action);
+  if (current) officeRuntime.value = reduceSharedOffice(current, action);
 }
 let lastSnapshot = snapshot.peek();
 effect(() => {
@@ -24,8 +24,8 @@ effect(() => {
   if (!snap) return;
   const nowMs = Date.now();
   if (!officeRuntime.peek())
-    officeRuntime.value = createOfficeRuntime(
-      deriveOfficeModel(snap),
+    officeRuntime.value = createSharedOfficeRuntime(
+      deriveSharedOfficeModel(snap),
       online,
       nowMs,
     );
@@ -33,14 +33,14 @@ effect(() => {
     if (snap !== lastSnapshot)
       dispatchOffice({
         type: "snapshot",
-        model: deriveOfficeModel(snap),
+        model: deriveSharedOfficeModel(snap),
         nowMs,
       });
     dispatchOffice({ type: "connectivity", online, nowMs });
   }
   lastSnapshot = snap;
   const liveIds = new Set(
-    deriveOfficeNotices(officeRuntime.peek()!.model).map((n) => n.id),
+    deriveSharedOfficeNotices(officeRuntime.peek()!.model).map((n) => n.id),
   );
   const dismissed = dismissedOfficeNotices.peek();
   if ([...dismissed].some((id) => !liveIds.has(id)))
@@ -48,14 +48,9 @@ effect(() => {
       [...dismissed].filter((id) => liveIds.has(id)),
     );
 });
-export function focusOfficeSession(floorId: string, sessionId: string) {
+export function focusOfficeSession(sessionId: string) {
   let runtime = officeRuntime.peek();
   if (!runtime) return;
-  if (runtime.selectedFloorId !== floorId)
-    runtime = reduceOffice(runtime, { type: "selectFloor", floorId });
-  runtime = reduceOffice(runtime, { type: "revealWorker", floorId, sessionId });
-  officeRuntime.value = reduceOffice(runtime, {
-    type: "select",
-    selection: { kind: "session", floorId, sessionId },
-  });
+  runtime = reduceSharedOffice(runtime, { type: "revealWorker", sessionId, nowMs: Date.now() });
+  officeRuntime.value = reduceSharedOffice(runtime, { type: "select", selection: { kind: "session", sessionId } });
 }

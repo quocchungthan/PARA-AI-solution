@@ -1,319 +1,121 @@
-import type {
-  OfficeModel,
-  OfficeRuntime,
-  OfficeSelection,
-  FloorRuntime,
-  WorkerSlot,
-  CameraPose,
-  OfficeFloor,
-  OfficeEvent,
-} from "./types";
+import type { CameraPose, SharedOfficeEvent, SharedOfficeModel, SharedOfficeRuntime, SharedOfficeSelection, WorkerSlot } from "./types";
 import { OFFICE_LAYOUT as layout } from "./layout";
-import { pathDuration, workerPath } from "./routes";
+import { pathDuration, sharedWorkerPath } from "./routes";
 import { officeRole } from "./roles";
-import { collectOfficeEvents } from "./events";
-export type OfficeAction =
-  | { type: "snapshot"; model: OfficeModel; nowMs: number }
+import { presentSession } from "./model";
+import { collectSharedOfficeEvents } from "./events";
+
+export type SharedOfficeAction =
+  | { type: "snapshot"; model: SharedOfficeModel; nowMs: number }
   | { type: "connectivity"; online: boolean; nowMs: number }
-  | { type: "selectFloor"; floorId: string }
-  | { type: "select"; selection: OfficeSelection }
-  | { type: "revealWorker"; floorId: string; sessionId: string }
-  | { type: "camera"; floorId: string; pose: CameraPose }
+  | { type: "select"; selection: SharedOfficeSelection }
+  | { type: "revealWorker"; sessionId: string; nowMs: number }
+  | { type: "camera"; pose: CameraPose }
   | { type: "tick"; nowMs: number };
-const temporarySeats = layout.seats.filter((s) => !s.reservedFor);
-function allocate(
-  id: string,
-  model: OfficeModel,
-  workers: readonly WorkerSlot[],
-  now: number,
-  phase: WorkerSlot["phase"] = "seated",
-): WorkerSlot {
-  const free = temporarySeats.filter(
-    (s) => !workers.some((w) => w.seatId === s.id),
-  );
-  const role = officeRole(model.sessionsById.get(id)?.agent);
-  const seat =
-    free.find((s) => s.rolePreference === role) ||
-    free.find((s) => !s.rolePreference) ||
-    free[0];
-  return {
-    sessionId: id,
-    seatId: seat.id,
-    identitySeed: id,
-    phase,
-    phaseStartedAt: now,
+
+export const sessionActorId = (sessionId: string) => JSON.stringify(["session", sessionId]);
+const seats = layout.seats.filter(s => !s.reservedFor);
+const CAPACITY = 10, TRANSITIONS = 2;
+const liveIds = (m: SharedOfficeModel) => m.sessionIds.filter(id => m.sessionsById.get(id)!.state !== "done");
+const transient = (w: WorkerSlot) => w.phase !== "seated";
+
+function allocate(id: string, m: SharedOfficeModel, workers: readonly WorkerSlot[], now: number, phase: WorkerSlot["phase"]): WorkerSlot {
+  const free = seats.filter(s => !workers.some(w => w.seatId === s.id));
+  const role = officeRole(m.sessionsById.get(id)?.agent);
+  const seat = free.find(s => s.rolePreference === role) ?? free.find(s => !s.rolePreference) ?? free[0];
+  return { sessionId: id, seatId: seat.id, identitySeed: id, phase, phaseStartedAt: now };
+}
+
+function fill(m: SharedOfficeModel, workers: readonly WorkerSlot[], now: number, arrivals: ReadonlySet<string> = new Set()): WorkerSlot[] {
+  const next = [...workers];
+  const priority = (id: string) => {
+    const p = presentSession(m.sessionsById.get(id)!);
+    return p.needsHuman ? 0 : p.activity === "working" ? 1 : 2;
   };
+  const waiting = liveIds(m).filter(id => !workers.some(w => w.sessionId === id))
+    .sort((a, b) => priority(a) - priority(b) || a.localeCompare(b));
+  for (const id of waiting) {
+    if (next.length >= CAPACITY) break;
+    const entering = arrivals.has(id) && m.sessionsById.get(id)!.state === "working" && next.filter(transient).length < TRANSITIONS;
+    next.push(allocate(id, m, next, now, entering ? "entering" : "seated"));
+  }
+  return next;
 }
-function hydrate(
-  f: OfficeFloor,
-  m: OfficeModel,
-  old: FloorRuntime | undefined,
-  now: number,
-): FloorRuntime {
-  const live = f.sessionIds.filter(
-    (id) => id !== f.rootId && m.sessionsById.get(id)?.state !== "done",
-  );
-  let workers = (old?.workers ?? [])
-    .filter((w) => live.includes(w.sessionId))
-    .map((w) => ({ ...w, phase: "seated" as const }));
-  for (const id of live)
-    if (workers.length < 10 && !workers.some((w) => w.sessionId === id))
-      workers.push(allocate(id, m, workers, now) as (typeof workers)[number]);
-  return { workers, queue: [], camera: old?.camera ?? null };
+
+function admit(queue: readonly SharedOfficeEvent[], m: SharedOfficeModel, now: number): SharedOfficeEvent[] {
+  const fresh = queue.filter(e =>
+    (e.kind !== "arrive" || m.sessionsById.get(e.sessionId)?.state === "working") &&
+    (e.startedAt !== undefined ? now - e.startedAt < 1500 : now - e.createdAt < 4000)).slice(-12);
+  let active = fresh.filter(e => e.startedAt !== undefined).length;
+  return fresh.map(e => e.startedAt === undefined && active < TRANSITIONS ? (active++, { ...e, startedAt: now }) : e);
 }
-export function createOfficeRuntime(
-  model: OfficeModel,
-  online: boolean,
-  nowMs: number,
-): OfficeRuntime {
-  return {
-    model,
-    online,
-    selectedFloorId: model.floors[0]?.rootId ?? null,
-    selection: null,
-    floors: new Map(
-      model.floors.map((f) => [f.rootId, hydrate(f, model, undefined, nowMs)]),
-    ),
-  };
+
+export function createSharedOfficeRuntime(model: SharedOfficeModel, online: boolean, nowMs: number): SharedOfficeRuntime {
+  return { model, online, selection: null, workers: fill(model, [], nowMs), queue: [], camera: null };
 }
-function reconcile(
-  state: OfficeRuntime,
-  m: OfficeModel,
-  now: number,
-  quiet: boolean,
-): OfficeRuntime {
-  const selected = m.floors.some((f) => f.rootId === state.selectedFloorId)
-    ? state.selectedFloorId
-    : (m.floors[0]?.rootId ?? null);
-  const floors = new Map<string, FloorRuntime>();
-  for (const f of m.floors) {
-    const old = state.floors.get(f.rootId);
-    if (quiet || f.rootId !== selected || !old) {
-      floors.set(f.rootId, hydrate(f, m, old, now));
-      continue;
-    }
-    let workers: WorkerSlot[] = old.workers
-      .filter(
-        (w) =>
-          f.sessionIds.includes(w.sessionId) && m.sessionsById.has(w.sessionId),
-      )
-      .map((w) => {
-        const s = m.sessionsById.get(w.sessionId)!;
-        if (s.state === "done" && !["reporting", "leaving"].includes(w.phase))
-          return { ...w, phase: "reporting", phaseStartedAt: now };
-        if (
-          (s.state !== "done" && ["reporting", "leaving"].includes(w.phase)) ||
-          (s.state !== "working" && w.phase === "entering")
-        )
-          return { ...w, phase: "seated", phaseStartedAt: now };
-        return w;
-      });
-    const live = f.sessionIds.filter(
-      (id) => id !== f.rootId && m.sessionsById.get(id)?.state !== "done",
-    );
-    for (const id of live) {
-      if (workers.some((w) => w.sessionId === id)) continue;
-      if (workers.length >= 10) {
-        const exit = workers.findIndex(
-          (w) => m.sessionsById.get(w.sessionId)?.state === "done",
-        );
-        if (exit < 0) continue;
-        workers.splice(exit, 1);
+
+function reconcile(state: SharedOfficeRuntime, model: SharedOfficeModel, now: number, quiet: boolean): SharedOfficeRuntime {
+  const events = quiet ? [] : collectSharedOfficeEvents(state.model, model, now);
+  let workers = state.workers.filter(w => model.sessionsById.has(w.sessionId));
+  if (quiet) workers = workers.filter(w => model.sessionsById.get(w.sessionId)!.state !== "done")
+    .map(w => ({ ...w, phase: "seated" }));
+  else {
+    workers = workers.map(w => {
+      const s = model.sessionsById.get(w.sessionId)!;
+      if (s.state === "done" && !["reporting", "leaving"].includes(w.phase)) {
+        const hasRecipient = model.delegations.some(d => d.targetId === w.sessionId && d.originId !== w.sessionId &&
+          model.sessionsById.has(d.originId) && ["assigned", "result_fed"].includes(d.status));
+        return { ...w, phase: hasRecipient ? "reporting" as const : "leaving" as const, phaseStartedAt: now };
       }
-      const entering = workers.filter(
-        (w) =>
-          w.phase === "entering" ||
-          w.phase === "reporting" ||
-          w.phase === "leaving",
-      ).length;
-      const s = m.sessionsById.get(id)!;
-      workers.push(
-        allocate(
-          id,
-          m,
-          workers,
-          now,
-          entering < 2 && s.registered !== false && s.state === "working"
-            ? "entering"
-            : "seated",
-        ),
-      );
-    }
-    // Completion bursts are settled without staging a crowd of reporting bodies.
-    let transient = 0;
-    workers = workers
-      .filter((w) => {
-        if (w.phase === "seated") return true;
-        return (
-          ++transient <= 2 || m.sessionsById.get(w.sessionId)?.state !== "done"
-        );
-      })
-      .map((w) =>
-        w.phase === "entering" && transient > 2 ? { ...w, phase: "seated" } : w,
-      );
-    const queue = [
-      ...old.queue.filter(
-        (e) =>
-          (e.kind !== "arrive" ||
-            m.sessionsById.get(e.sessionId)?.state === "working") &&
-          (e.startedAt !== undefined
-            ? now - e.startedAt < 1500
-            : now - e.createdAt < 4000),
-      ),
-      ...collectOfficeEvents(state.model, m, f.rootId, now),
-    ].slice(-12);
-    let running = queue.filter((e) => e.startedAt !== undefined).length;
-    const admitted = queue.map((e) =>
-      e.startedAt === undefined && running++ < 2 ? { ...e, startedAt: now } : e,
-    );
-    floors.set(f.rootId, { workers, queue: admitted, camera: old.camera });
+      if ((s.state !== "done" && ["reporting", "leaving"].includes(w.phase)) || (s.state !== "working" && w.phase === "entering"))
+        return { ...w, phase: "seated" as const, phaseStartedAt: now };
+      return w;
+    });
+    let moving = 0;
+    workers = workers.flatMap(w => {
+      if (!transient(w) || ++moving <= TRANSITIONS) return [w];
+      return model.sessionsById.get(w.sessionId)!.state === "done" ? [] : [{ ...w, phase: "seated" as const }];
+    });
   }
-  return {
-    ...state,
-    model: m,
-    selectedFloorId: selected,
-    floors,
-    notice:
-      selected !== state.selectedFloorId && state.selectedFloorId
-        ? "The previous floor is unavailable. Showing the next available conversation."
-        : state.notice,
-  };
+  workers = fill(model, workers, now, new Set(events.filter(e => e.kind === "arrive").map(e => e.sessionId)));
+  return { ...state, model, workers, queue: quiet ? [] : admit([...state.queue, ...events], model, now) };
 }
-export function reduceOffice(
-  state: OfficeRuntime,
-  action: OfficeAction,
-): OfficeRuntime {
-  if (action.type === "snapshot")
-    return reconcile(state, action.model, action.nowMs, !state.online);
-  if (action.type === "connectivity") {
-    if (state.online === action.online) return state;
-    const next = { ...state, online: action.online };
-    return reconcile(next, state.model, action.nowMs, true);
-  }
-  if (action.type === "select")
-    return { ...state, selection: action.selection };
-  if (action.type === "selectFloor") {
-    if (!state.model.floors.some((f) => f.rootId === action.floorId))
-      return state;
-    return {
-      ...state,
-      selectedFloorId: action.floorId,
-      selection: null,
-      notice: undefined,
-      floors: new Map(
-        [...state.floors].map(([id, f]) => [
-          id,
-          {
-            ...f,
-            queue: [],
-            workers: f.workers
-              .filter(
-                (w) =>
-                  state.model.sessionsById.get(w.sessionId)?.state !== "done",
-              )
-              .map((w) => ({ ...w, phase: "seated" as const })),
-          },
-        ]),
-      ),
-    };
-  }
-  const floors = new Map(state.floors);
-  if (action.type === "camera") {
-    const f = floors.get(action.floorId);
-    if (f) floors.set(action.floorId, { ...f, camera: action.pose });
-    return { ...state, floors };
-  }
+
+export function reduceSharedOffice(state: SharedOfficeRuntime, action: SharedOfficeAction): SharedOfficeRuntime {
+  if (action.type === "snapshot") return reconcile(state, action.model, action.nowMs, !state.online);
+  if (action.type === "connectivity") return action.online === state.online ? state :
+    reconcile({ ...state, online: action.online }, state.model, action.nowMs, true);
+  if (action.type === "select") return { ...state, selection: action.selection };
+  if (action.type === "camera") return { ...state, camera: action.pose };
   if (action.type === "revealWorker") {
-    const f = floors.get(action.floorId),
-      floor = state.model.floors.find((v) => v.rootId === action.floorId);
-    if (
-      !f ||
-      !floor?.sessionIds.includes(action.sessionId) ||
-      action.sessionId === action.floorId ||
-      state.model.sessionsById.get(action.sessionId)?.state === "done" ||
-      f.workers.some((w) => w.sessionId === action.sessionId)
-    )
-      return state;
-    const workers = [...f.workers];
-    if (workers.length >= 10) {
-      let i = workers.length - 1;
-      if (
-        state.selection?.kind === "session" &&
-        workers[i].sessionId === state.selection.sessionId
-      )
-        i--;
-      workers.splice(Math.max(i, 0), 1);
+    if (!state.model.sessionsById.has(action.sessionId) || state.model.sessionsById.get(action.sessionId)!.state === "done" ||
+      state.workers.some(w => w.sessionId === action.sessionId)) return state;
+    const workers = [...state.workers];
+    if (workers.length >= CAPACITY) {
+      const selectedId = state.selection?.kind === "session" ? state.selection.sessionId : null;
+      let index = -1;
+      for (let i = workers.length - 1; i >= 0; i--)
+        if (workers[i].sessionId !== selectedId && workers[i].phase === "seated") { index = i; break; }
+      if (index < 0)
+        for (let i = workers.length - 1; i >= 0; i--)
+          if (workers[i].sessionId !== selectedId) { index = i; break; }
+      workers.splice(index < 0 ? workers.length - 1 : index, 1);
     }
-    workers.push(allocate(action.sessionId, state.model, workers, Date.now()));
-    floors.set(action.floorId, { ...f, workers });
-    return { ...state, floors };
+    workers.push(allocate(action.sessionId, state.model, workers, action.nowMs, "seated"));
+    return { ...state, workers };
   }
-  if (action.type === "tick" && state.online && state.selectedFloorId) {
-    const f = floors.get(state.selectedFloorId);
-    if (!f) return state;
-    let changed = false;
-    const workers = f.workers.flatMap((w) => {
+  if (action.type === "tick" && state.online) {
+    const workers = state.workers.flatMap(w => {
       const elapsed = action.nowMs - w.phaseStartedAt;
-      let phase = w.phase;
-      if (
-        w.phase === "entering" &&
-        elapsed >=
-          pathDuration(
-            workerPath(
-              layout,
-              w,
-              state.model,
-              state.selectedFloorId!,
-              f.workers,
-            ),
-          )
-      )
-        phase = "seated";
-      if (w.phase === "reporting" && elapsed >= 1500) phase = "leaving";
-      if (
-        w.phase === "leaving" &&
-        elapsed >=
-          pathDuration(
-            workerPath(
-              layout,
-              w,
-              state.model,
-              state.selectedFloorId!,
-              f.workers,
-            ),
-          )
-      ) {
-        changed = true;
-        return [];
-      }
-      if (phase !== w.phase) {
-        changed = true;
-        return [{ ...w, phase, phaseStartedAt: action.nowMs }];
-      }
+      if (w.phase === "reporting" && elapsed >= 1500) return [{ ...w, phase: "leaving" as const, phaseStartedAt: action.nowMs }];
+      if (["entering", "leaving"].includes(w.phase) && elapsed >= pathDuration(sharedWorkerPath(layout, w, state.model, state.workers)))
+        return w.phase === "leaving" ? [] : [{ ...w, phase: "seated" as const, phaseStartedAt: action.nowMs }];
       return [w];
     });
-    let active = 0;
-    const queue: OfficeEvent[] = f.queue
-      .filter((e) =>
-        e.startedAt !== undefined
-          ? action.nowMs - e.startedAt < 1500
-          : action.nowMs - e.createdAt < 4000,
-      )
-      .map((e) => {
-        if (e.startedAt !== undefined) {
-          active++;
-          return e;
-        }
-        if (active++ < 2) {
-          changed = true;
-          return { ...e, startedAt: action.nowMs };
-        }
-        return e;
-      });
-    if (queue.length !== f.queue.length) changed = true;
-    if (!changed) return state;
-    floors.set(state.selectedFloorId, { ...f, workers, queue });
-    return { ...state, floors };
+    const next = fill(state.model, workers, action.nowMs), queue = admit(state.queue, state.model, action.nowMs);
+    if (next.length === state.workers.length && next.every((w, i) => w === state.workers[i]) &&
+      queue.length === state.queue.length && queue.every((e, i) => e === state.queue[i])) return state;
+    return { ...state, workers: next, queue };
   }
   return state;
 }

@@ -1,93 +1,48 @@
-import type { OfficeRuntime, OfficeSelection } from "./types";
-import { OFFICE_ROLES, ROLE_NAMES } from "./roles";
+import type { SharedOfficeRuntime, SharedOfficeSelection } from "./types";
+import { ROLE_NAMES } from "./roles";
 import { presentSession, sessionTitle } from "./model";
-export function OfficeRoster({
-  runtime,
-  onSelect,
-  onReveal,
-}: {
-  runtime: OfficeRuntime;
-  onSelect: (s: OfficeSelection) => void;
-  onReveal: (floorId: string, sessionId: string) => void;
+export function OfficeRoster({ runtime, onSelect, onReveal }: {
+  runtime: SharedOfficeRuntime;
+  onSelect: (selection: SharedOfficeSelection) => void;
+  onReveal: (sessionId: string) => void;
 }) {
-  const floor = runtime.model.floors.find(
-    (f) => f.rootId === runtime.selectedFloorId,
-  );
-  if (!floor) return null;
-  const floorId = floor.rootId,
-    workers = runtime.floors.get(floorId)?.workers ?? [],
-    live = floor.sessionIds.filter(
-      (id) =>
-        id !== floorId && runtime.model.sessionsById.get(id)?.state !== "done",
-    );
+  const { model, workers } = runtime;
+  const live = model.sessionIds.filter(id => model.sessionsById.get(id)!.state !== "done");
+  const represented = live.filter(id => workers.some(w => w.sessionId === id)).length;
   return (
     <div className="officeRoster" aria-label="Office roster">
       <div className="officePeople">
-        <button onClick={() => onSelect({ kind: "human", floorId })}>
-          You · manager
-        </button>
-        {OFFICE_ROLES.map((role) => (
-          <button
-            key={role}
-            aria-label={
-              role === "coordinator"
-                ? "Executive assistant"
-                : `${ROLE_NAMES[role]} lead`
-            }
-            onClick={() =>
-              onSelect(
-                role === "coordinator"
-                  ? { kind: "session", floorId, sessionId: floorId }
-                  : { kind: "department", floorId, role },
-              )
-            }
-          >
-            {ROLE_NAMES[role]}
-            <small>
-              {role === "coordinator"
-                ? presentSession(runtime.model.sessionsById.get(floorId)!)
-                    .activity
-                : `${floor.departments.find((d) => d.role === role)?.working ?? 0} working`}
-            </small>
+        <button onClick={() => onSelect({ kind: "human" })}>You · manager</button>
+        {model.departments.map(d => (
+          <button key={d.agent}
+            aria-label={d.role === "coordinator" ? "Executive assistant" : d.role === "unknown" ? `${d.agent} role` : `${ROLE_NAMES[d.role]} lead`}
+            onClick={() => onSelect({ kind: "department", agent: d.agent })}>
+            {d.role === "unknown" ? d.agent : ROLE_NAMES[d.role]}
+            <small>{d.working} working</small>
           </button>
         ))}
       </div>
       <details className="officeSessionList" open>
-        <summary>
-          Sessions · {live.length} temporary
-          {live.length > 10 ? ` · ${live.length - 10} beyond 3D capacity` : ""}
-        </summary>
+        <summary>Sessions · {live.length} live · {represented} in 3D · {live.length - represented} list only</summary>
         <div>
-          {floor.sessionIds
-            .filter((id) => id !== floorId)
-            .map((id) => {
-              const s = runtime.model.sessionsById.get(id)!,
-                p = presentSession(s),
-                visible = workers.some((w) => w.sessionId === id);
-              return (
-                <button
-                  key={id}
-                  className={`officeSession status-${p.activity}`}
-                  aria-label={`Worker ${sessionTitle(s)} · ${p.activity}`}
-                  onClick={() => {
-                    onReveal(floorId, id);
-                    onSelect({ kind: "session", floorId, sessionId: id });
-                  }}
-                >
-                  <span>{sessionTitle(s)}</span>
-                  <small>
-                    {s.agent ?? "unknown"} · {p.activity}
-                    {p.needsHuman ? " · needs you" : ""}
-                    {p.healthIssues.length ? " · health issue" : ""}
-                    {!p.verified ? " · unverified" : ""}
-                    {!visible && s.state !== "done" ? " · list only" : ""}
-                  </small>
-                </button>
-              );
-            })}
-          {floor.sessionIds.length === 1 && (
-            <p>No temporary workers on this floor.</p>
-          )}
+          {model.sessionIds.map(id => {
+            const s = model.sessionsById.get(id)!, p = presentSession(s);
+            const visible = workers.some(w => w.sessionId === id);
+            return (
+              <button key={id} className={`officeSession status-${p.activity}`}
+                aria-label={`Worker ${sessionTitle(s)} · ${p.activity}`}
+                onClick={() => { onReveal(id); onSelect({ kind: "session", sessionId: id }); }}>
+                <span>{sessionTitle(s)}</span>
+                <small>{s.agent || "unassigned"} · {p.activity}
+                  {p.needsHuman ? " · needs you" : ""}
+                  {p.healthIssues.length ? " · health issue" : ""}
+                  {!p.verified ? " · unverified" : ""}
+                  {!visible && s.state !== "done" ? " · list only" : ""}
+                </small>
+              </button>
+            );
+          })}
+          {model.sessionIds.length === 0 && <p>No sessions yet.</p>}
         </div>
       </details>
     </div>

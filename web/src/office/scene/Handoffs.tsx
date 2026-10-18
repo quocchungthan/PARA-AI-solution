@@ -1,17 +1,16 @@
+import { sessionActorId } from "../runtime";
 import { useRef, type MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Group, Vector3 } from "three";
-import type { OfficeEvent } from "../types";
+import type { SharedOfficeEvent } from "../types";
 export function Handoffs({
   events,
   anchors,
-  rootId,
   reducedMotion,
   budget,
 }: {
-  events: readonly OfficeEvent[];
+  events: readonly SharedOfficeEvent[];
   anchors: MutableRefObject<Map<string, Group>>;
-  rootId: string;
   reducedMotion: boolean;
   budget: number;
 }) {
@@ -24,7 +23,7 @@ export function Handoffs({
         )
         .slice(0, budget)
         .map((e) => (
-          <Card key={e.id} event={e} anchors={anchors} rootId={rootId} />
+          <Card key={e.id} event={e} anchors={anchors} />
         ))}
     </>
   );
@@ -32,22 +31,16 @@ export function Handoffs({
 function Card({
   event,
   anchors,
-  rootId,
 }: {
-  event: OfficeEvent;
+  event: SharedOfficeEvent;
   anchors: MutableRefObject<Map<string, Group>>;
-  rootId: string;
 }) {
   const card = useRef<Group>(null),
     a = useRef(new Vector3()),
     b = useRef(new Vector3());
   useFrame(() => {
-    const origin = anchors.current.get(
-        event.originId === rootId ? "assistant" : event.originId!,
-      ),
-      target = anchors.current.get(
-        event.sessionId === rootId ? "assistant" : event.sessionId,
-      );
+    const origin = anchors.current.get(sessionActorId(event.originId!)),
+      target = anchors.current.get(sessionActorId(event.sessionId));
     if (!origin || !target) {
       if (card.current) card.current.visible = false;
       return;

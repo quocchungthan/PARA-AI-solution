@@ -2,10 +2,9 @@ import { Canvas } from "@react-three/fiber";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Group } from "three";
 import type {
-  OfficeFloor,
-  FloorRuntime,
-  OfficeModel,
-  OfficeSelection,
+  SharedOfficeRuntime,
+  SharedOfficeModel,
+  SharedOfficeSelection,
   OfficeCameraHandle,
   CameraPose,
   Vec3,
@@ -18,18 +17,17 @@ import { Labels, type LabelAnchor } from "./Labels";
 import { Handoffs } from "./Handoffs";
 import { SceneMetrics } from "./resources";
 export type OfficeCanvasProps = {
-  floor: OfficeFloor;
-  floorRuntime: FloorRuntime;
-  model: OfficeModel;
+  runtime: SharedOfficeRuntime;
+  model: SharedOfficeModel;
   theme: "light" | "dark";
   reducedMotion: boolean;
-  selection: OfficeSelection;
+  selection: SharedOfficeSelection;
   cameraRef: RefObject<OfficeCameraHandle | null>;
-  onSelect: (s: OfficeSelection) => void;
+  onSelect: (s: SharedOfficeSelection) => void;
   onCameraChange: (pose: CameraPose) => void;
   onTick: (nowMs: number) => void;
 };
-const sameSelection = (a: OfficeSelection, b: OfficeSelection) =>
+const sameSelection = (a: SharedOfficeSelection, b: SharedOfficeSelection) =>
   JSON.stringify(a) === JSON.stringify(b);
 export default function OfficeCanvas(props: OfficeCanvasProps) {
   const container = useRef<HTMLDivElement>(null),
@@ -70,7 +68,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
         <div className="officeFallback" role="status">
           <strong>3D office unavailable</strong>
           <p>
-            The graphics context was lost. Your floor and session details are
+            The graphics context was lost. Your camera and session details are
             preserved.
           </p>
           <button
@@ -85,7 +83,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
       ) : (
         <>
           <Canvas
-            key={`${props.floor.rootId}:${generation}`}
+            key={generation}
             orthographic
             camera={{ position: [-26, 28, 40], near: 0.1, far: 180, zoom: 15 }}
             // Supersample standard displays; cap high-density screens at 2x.
@@ -104,7 +102,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
           >
             <OfficeCamera
               layout={OFFICE_LAYOUT}
-              pose={props.floorRuntime.camera}
+              pose={props.runtime.camera}
               onChange={props.onCameraChange}
               controllerRef={props.cameraRef}
               reducedMotion={props.reducedMotion}
@@ -117,16 +115,15 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
                 props={props}
               />
               <Handoffs
-                events={props.floorRuntime.queue}
+                events={props.runtime.queue}
                 anchors={registry}
-                rootId={props.floor.rootId}
                 reducedMotion={props.reducedMotion}
                 budget={Math.max(
                   0,
                   2 -
-                    props.floorRuntime.workers.filter(
-                      (w) => w.phase === "entering" || w.phase === "leaving",
-                    ).length,
+                  props.runtime.workers.filter(
+                    (w) => w.phase === "entering" || w.phase === "leaving",
+                  ).length,
                 )}
               />
             </OfficeScene>
@@ -134,7 +131,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
             <SceneMetrics />
           </Canvas>
           <div className="officeSignals" aria-hidden="true">
-            {props.floorRuntime.queue
+            {props.runtime.queue
               .filter((e) => e.startedAt !== undefined)
               .slice(0, 2)
               .map((e) => (

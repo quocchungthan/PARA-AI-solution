@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { OfficeRuntime, OfficeSelection } from "./types";
-import { ROLE_DUTIES, ROLE_NAMES } from "./roles";
+import type { SharedOfficeRuntime, SharedOfficeSelection } from "./types";
+import { ROLE_DUTIES, ROLE_NAMES, officeRole } from "./roles";
 import { presentSession, sessionTitle } from "./model";
 export function OfficeDetails({
   runtime,
@@ -8,8 +8,8 @@ export function OfficeDetails({
   onClose,
   onOpenSession,
 }: {
-  runtime: OfficeRuntime;
-  onSelect: (s: OfficeSelection) => void;
+  runtime: SharedOfficeRuntime;
+  onSelect: (s: SharedOfficeSelection) => void;
   onClose: () => void;
   onOpenSession: (id: string) => void;
 }) {
@@ -44,17 +44,13 @@ export function OfficeDetails({
     return () => document.removeEventListener("keydown", escape, true);
   }, [
     selection?.kind,
-    selection?.floorId,
     selection?.kind === "session"
       ? selection.sessionId
       : selection?.kind === "department"
-        ? selection.role
+        ? selection.agent
         : "",
   ]);
   if (!selection) return null;
-  const floor = runtime.model.floors.find(
-    (f) => f.rootId === selection.floorId,
-  );
   let content;
   if (selection.kind === "human")
     content = (
@@ -67,19 +63,20 @@ export function OfficeDetails({
       </>
     );
   else if (selection.kind === "department") {
-    const d = floor?.departments.find((d) => d.role === selection.role);
+    const d = runtime.model.departments.find((d) => d.agent === selection.agent);
+    const role = officeRole(selection.agent);
     content = (
       <>
-        <h3>{ROLE_NAMES[selection.role]}</h3>
+        <h3>{role === "unknown" ? selection.agent : ROLE_NAMES[role]}</h3>
         <p className="officeEyebrow">Department representative</p>
-        <p>{ROLE_DUTIES[selection.role]}</p>
+        <p>{role === "unknown" ? "Sessions grouped by their recorded agent role. No dedicated room mapping." : ROLE_DUTIES[role]}</p>
         <p>
           {d?.working ?? 0} working · {d?.waiting ?? 0} waiting ·{" "}
           {d?.needsHuman ?? 0} need you · {d?.healthIssues ?? 0} health issues
         </p>
         <p>
-          This permanent lead summarizes the department, rather than a separate
-          agent session.
+          This summary covers all sessions for this role. Permanent representatives
+          are not separate agent sessions.
         </p>
         {d?.sessionIds.map((id) => (
           <button
@@ -87,7 +84,6 @@ export function OfficeDetails({
             onClick={() =>
               onSelect({
                 kind: "session",
-                floorId: selection.floorId,
                 sessionId: id,
               })
             }
@@ -120,9 +116,7 @@ export function OfficeDetails({
       content = (
         <>
           <p className="officeEyebrow">
-            {s.sessionId === selection.floorId
-              ? "Executive assistant"
-              : "Temporary worker"}{" "}
+            Session worker{" "}
             · {s.agent ?? "unknown"}
           </p>
           <h3>{sessionTitle(s)}</h3>
@@ -131,7 +125,7 @@ export function OfficeDetails({
             {p.needsHuman ? " · needs your input" : ""}
           </p>
           {!p.verified && (
-            <p>Unverified source: role or registration is unknown.</p>
+            <p>Unverified source: agent name is missing or registration is not verified.</p>
           )}
           {p.healthIssues.map((issue) => (
             <p key={issue} className="officeWarning">
@@ -139,6 +133,7 @@ export function OfficeDetails({
             </p>
           ))}
           <p>{s.task}</p>
+          {runtime.model.diagnostics.filter(d => d.sessionId === s.sessionId).map((d, i) => <p className="officeWarning" key={i}>{d.message}</p>)}
           {parents.length > 0 && (
             <>
               <h4>Delegated by</h4>
@@ -189,8 +184,8 @@ export function OfficeDetails({
               <p key={d.key}>
                 Handoff · {d.targetId} · {d.status}
                 {!runtime.model.sessionsById.has(d.targetId) &&
-                ["assigned", "result_fed"].includes(d.status)
-                  ? " · awaiting registration"
+                  ["assigned", "result_fed"].includes(d.status)
+                  ? " · awaiting session record"
                   : ""}
               </p>
             ))}

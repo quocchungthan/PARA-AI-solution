@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createSharedOfficeRuntime as create, reduceSharedOffice as reduce, sessionActorId } from "../../src/office/sharedRuntime";
+import { createSharedOfficeRuntime as create, reduceSharedOffice as reduce, sessionActorId } from "../../src/office/runtime";
 import { deriveSharedOfficeModel as model } from "../../src/office/model";
 import { sharedWorkerPath, pathDuration } from "../../src/office/routes";
 import { OFFICE_LAYOUT as layout } from "../../src/office/layout";
