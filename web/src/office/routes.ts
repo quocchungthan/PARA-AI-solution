@@ -1,5 +1,5 @@
 import type { OfficeLayout } from "./layout";
-import type { Vec3, OfficeModel, WorkerSlot } from "./types";
+import type { Vec3, OfficeModel, WorkerSlot, SharedOfficeModel } from "./types";
 export const distance = (a: Vec3, b: Vec3) =>
   Math.hypot(a[0] - b[0], a[2] - b[2]);
 export function isWalkable(l: OfficeLayout, p: Vec3) {
@@ -181,3 +181,15 @@ export const routeDuration = (l: OfficeLayout, from: Vec3, to: Vec3) => {
     (p.slice(1).reduce((sum, v, i) => sum + distance(p[i], v), 0) / 2.2) * 1000
   );
 };
+
+export function sharedWorkerPath(layout: OfficeLayout, worker: WorkerSlot, model: SharedOfficeModel, workers: readonly WorkerSlot[]): readonly Vec3[] {
+  const seat = layout.seats.find(s => s.id === worker.seatId)!;
+  if (worker.phase === "entering") return [...findRoute(layout, layout.entry, seat.approach), seat.position];
+  if (worker.phase !== "leaving") return [seat.position];
+  const parentIds = model.delegations.filter(d => d.targetId === worker.sessionId && d.originId !== worker.sessionId &&
+    ["assigned", "result_fed"].includes(d.status)).map(d => d.originId).sort();
+  const parent = parentIds.map(id => workers.find(w => w.sessionId === id)).find(w => w !== undefined);
+  const recipient = parent ? layout.seats.find(s => s.id === parent.seatId)!.approach : undefined;
+  return recipient ? [seat.position, ...findRoute(layout, seat.approach, recipient), ...findRoute(layout, recipient, layout.entry).slice(1)] :
+    [seat.position, ...findRoute(layout, seat.approach, layout.entry)];
+}
