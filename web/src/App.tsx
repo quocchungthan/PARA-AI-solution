@@ -5,7 +5,7 @@ import {
   toast, toggleTheme, unread, type Page,
 } from "./store";
 import { AgentCards, Health, Kanban as WorkQueue, Logs, Throughput } from "./Panels";
-import { Network } from "./Network";
+import { OrchestrationPanel, type OrchestrationView } from "./office/OrchestrationPanel";
 import { Drawer } from "./Fx";
 import { AgentGlyph } from "./Glyph";
 import { BrandName, Loader, Logo, NotFoundTitle, OfflineBackdrop, OfflineTitle, PageSpark, Splash, StatusOrb } from "./Effects";
@@ -132,6 +132,7 @@ function Connecting() {
 }
 
 export function App() {
+  const [orchestrationView, setOrchestrationView] = useState<OrchestrationView>("office");
   const online = serviceOnline.value;
   const c = counts.value;
   const isDark = dark.value;
@@ -173,8 +174,8 @@ export function App() {
         {!notFound.value && online && snapshot.value && (
           <div key={current} className="page">
             {current === "overview" && (
-              <div className="overview">
-                <Network />
+              <div className={`overview${orchestrationView === "office" ? " officeOverview" : ""}`}>
+                <OrchestrationPanel view={orchestrationView} onViewChange={setOrchestrationView} />
                 <Logs />
               </div>
             )}

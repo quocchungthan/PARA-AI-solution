@@ -1,4 +1,6 @@
 import { signal, computed, effect } from "@preact/signals-react";
+import { agentOf } from "./sessionAgent";
+export { agentOf } from "./sessionAgent";
 import { dark, skipSplash as notFound } from "./ui/theme";
 export { dark, notFound };
 
@@ -74,7 +76,6 @@ export const columnOf = (s: Session): Column =>
   : s.state === "needs_human" || (s.state === "blocked" && needsHumanInput(s)) ? "attention"
   : "queue";
 
-export const agentOf = (s: Session) => (s.agent && s.agent !== "unknown" ? s.agent : "unassigned");
 export function needsHumanInput(s: Session) {
   return s.state === "needs_human" || (s.state !== "done" && s.needs.some((n) => n.resolver === "human"));
 }

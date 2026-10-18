@@ -4,6 +4,40 @@ Reusable UI kit extracted from **PARA Bridge**: dark/light Graphite & Ice theme 
 
 ---
 
+## Agent office dashboard
+
+The dashboard's Overview opens **Office** by default. **Graph** keeps the existing orchestration network available. Botanical Studio is a procedural 3D voxel office with the same light/dark switch as the dashboard; it is dashboard code, separate from the published UI-kit entry points.
+
+- One shared office shows activity across every session, grouped by agent role like the network graph. No conversation floor selection is needed; standalone sessions and sessions with missing/cyclic delegation records remain accessible.
+- **You** are the visual manager. The executive assistant summarizes all coordinator sessions. Six other permanent department leads summarize research, implementation, code review, functional review, agent/tool capabilities (HR), and team health. They are representatives, not extra backend agent sessions.
+- Every unfinished session, including coordinator sessions, can occupy a temporary worker seat. At most **10 temporary workers appear across the whole office**. All sessions, including overflow and completed results, remain in the roster. Selecting an overflow session reveals it without increasing the capacity. This display limit never limits Bridge execution.
+- Additional/custom agent roles appear under their recorded names in role summaries and the roster, with generic workers rather than additional rooms. Source registration is independent of whether a role has a built-in visual mapping.
+- Click an actor or use its roster button for a nonmodal observation panel. It shows source state, delegators, questions, needs, recent progress, results and handoffs. **Open session** opens the existing inspector/reply drawer. The office itself has no assignment or reply form.
+- Human-input, health, and failed/limited handoff notices have separate meanings. They wait for your click and never move the camera automatically. Dismissing a notice hides its presentation; the underlying global counts and session details remain visible.
+- Left-drag to orbit through 360°, right-drag or Shift-drag to pan, and scroll to zoom. On touch screens, use one finger to orbit and two fingers to pan/pinch. Vertical orbit stays upright above the target. Room labels/controls keep your angle; **Home** restores the default V view and fits the office. One shared camera is remembered during navigation.
+- Office uses the full panel width with logs below; Graph retains its existing layout. Removing floor controls leaves more vertical room for the canvas.
+- Buttons and the full roster work with a keyboard. Escape closes focused observation details and returns focus. Reduced motion suppresses walking and fidgeting while preserving status text. Under 900 CSS pixels, summaries load first; **Show 3D office** opts into a compact preview.
+- When rendering/chunk loading fails, keep using summaries or **Graph**; **Retry 3D office** recreates the scene. Graphics context loss preserves selection and camera. Bridge outages use the existing offline screen, then restore surviving context without replaying the gap.
+
+Snapshots are authoritative. Animations illustrate observed arrivals and actual delegation/report relationships; the two-second poll can miss intermediate events. Flying handoff/report cards require both exact session workers to be visible; an absent worker is never replaced by a role representative. Events and source details remain accessible when their endpoints are list-only. Waiting/blocked workers do not become idle lounge characters. Missing records, cycles and source warnings remain disclosed in observation details; relationships do not gate session visibility, and a shared target is counted only once.
+
+Develop and verify with Node 24:
+
+```sh
+npm ci
+npx playwright install chromium
+npm run test:office
+npm run test:e2e:office
+npm run build
+npm run build:ui
+```
+
+Browser tests intercept the local Bridge API with synthetic fixtures and reject writes. To smoke-test built assets below a deployment prefix, run `OFFICE_PRODUCTION=1 npm run test:e2e:office -- --grep 'production:'` (PowerShell: `$env:OFFICE_PRODUCTION='1'` first). The browser harness defaults to deterministic software graphics; `OFFICE_GPU_PROFILE=1` uses an installed Edge browser's normal graphics path for a local performance measurement. The verification-only `office-checks.yml` workflow never publishes or deploys.
+
+Browser screenshots and frame timings are written to `test-results/office-evidence/`, which is ignored by Git and included in CI failure artifacts.
+
+---
+
 ## 1. Install from GitHub Packages
 
 Configure `@quocchungthan` to use GitHub Packages in your project's `.npmrc`:
