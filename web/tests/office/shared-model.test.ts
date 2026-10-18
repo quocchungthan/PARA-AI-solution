@@ -64,3 +64,10 @@ test("pending relationships with absent endpoints remain globally disclosed with
   assert.match(n[0].label, /awaiting session record/);
   assert.equal(m.counts.failedHandoffs, 0);
 });
+test("every member of overlapping cycles is diagnosed, without flagging acyclic descendants", () => {
+  const m = deriveSharedOfficeModel(snap([s("a"), s("b"), s("c"), s("outside")], [
+    d("ab", "a", "b"), d("ba", "b", "a"), d("ac", "a", "c"), d("cb", "c", "b"), d("co", "c", "outside"),
+  ]));
+  assert.deepEqual(m.diagnostics.filter(d => /cycle/i.test(d.message)).map(d => d.sessionId).sort(), ["a", "b", "c"]);
+  assert.equal(m.sessionIds.length, 4);
+});

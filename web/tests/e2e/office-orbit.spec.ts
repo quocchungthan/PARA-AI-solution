@@ -77,10 +77,10 @@ test("orbit: passes a full horizontal revolution, stays above the floor, and Hom
   expect(reset.zoom).toBeCloseTo(home.zoom, 6);
 });
 
-test("orbit: pan and zoom keep orientation; room focus and floor/view changes retain the chosen angle", async ({ page }) => {
+test("orbit: pan and zoom keep orientation; room focus and snapshot/view changes retain the chosen angle", async ({ page }) => {
   const snap = populated(1);
-  snap.sessions.push(session("second", "coordinator", "working", { title: "Second floor" }));
-  await installSnapshotRoute(page, snap);
+  snap.sessions.push(session("second", "coordinator", "working", { title: "Second conversation" }));
+  const api = await installSnapshotRoute(page, snap);
   await ready(page);
   const home = await pose(page);
   const orbited = await drag(page, 90, -20);
@@ -107,10 +107,11 @@ test("orbit: pan and zoom keep orientation; room focus and floor/view changes re
   expect(polar(resized)).toBeCloseTo(polar(focused), 6);
   expect(azimuth(resized)).toBeCloseTo(azimuth(focused), 6);
   await page.getByRole("button", { name: "Close observation" }).click();
-  await page.getByLabel("Conversation floor").selectOption("second");
-  await expect.poll(async () => azimuth(await pose(page))).toBeCloseTo(azimuth(home), 6);
-  await drag(page, -70);
-  await page.getByLabel("Conversation floor").selectOption("main");
+  const handle = await page.locator(".officeCanvas canvas").elementHandle();
+  snap.sessions.push(session("standalone"));
+  api.setSnapshot(structuredClone(snap));
+  await expect(page.locator(".officeSession").filter({ hasText: "Task standalone" })).toBeVisible();
+  expect(await handle!.evaluate(node => node.isConnected)).toBe(true);
   await expect.poll(async () => azimuth(await pose(page))).toBeCloseTo(azimuth(focused), 6);
   await page.getByRole("button", { name: "Graph", exact: true }).click();
   await expect(page.locator(".officeCanvas canvas")).toHaveCount(0);

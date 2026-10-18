@@ -26,7 +26,7 @@ export type ActorDescriptor = {
 };
 export function describeActors(props: OfficeCanvasProps): ActorDescriptor[] {
   const actors: ActorDescriptor[] = [{
-    id: "human", label: "You � manager", kind: "human", role: "coordinator",
+    id: "human", label: "You · manager", kind: "human", role: "coordinator",
     position: l.human, rotation: Math.PI, status: "human", health: false,
     selection: { kind: "human" }, identitySeed: "human",
   }];

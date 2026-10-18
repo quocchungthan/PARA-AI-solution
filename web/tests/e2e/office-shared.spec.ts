@@ -57,6 +57,11 @@ test("shared: canvas keeps the reclaimed control space and Office/Graph log plac
     const office = await page.locator(".orchestrationPanel").boundingBox();
     const scene = await page.locator(".officeSceneRegion").boundingBox();
     const roster = await page.locator(".officeRoster").boundingBox();
+    const panel = await page.locator(".officePanel").boundingBox();
+    const summary = await page.locator(".officeSummary").boundingBox();
+    const notices = await page.locator(".officeNotices").boundingBox();
+    expect(scene!.height).toBeGreaterThanOrEqual(panel!.height - summary!.height - roster!.height - (notices?.height ?? 0) - 2);
+    expect(Math.abs(scene!.y + scene!.height - roster!.y)).toBeLessThanOrEqual(1);
     const controls = await page.locator(".officeFloors").count() ? await page.locator(".officeFloors").boundingBox() : null;
     const logs = await page.locator(".console").boundingBox();
     expect(logs!.y).toBeGreaterThanOrEqual(office!.y + office!.height);

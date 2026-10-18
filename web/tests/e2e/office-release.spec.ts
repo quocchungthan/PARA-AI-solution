@@ -20,14 +20,14 @@ test("release: idle pantry, actual walking, selected-worker and fallback evidenc
   });
   await page.getByRole("button", { name: "Home view", exact: true }).click();
   api.setSnapshot(populated(1));
-  const worker = page.locator(".officeActorLabel[data-kind=worker]");
+  const worker = page.locator('.officeActorLabel[data-kind=worker][data-identity="worker-0"]');
   await expect(worker).toHaveAttribute("data-phase", "entering");
   const transform = await worker.evaluate((el) => el.style.transform);
   await expect
     .poll(() => worker.evaluate((el) => el.style.transform))
     .not.toBe(transform);
   const fullWidth = await page.locator(".officeCanvas canvas").evaluate(
-    (c) => (c as HTMLCanvasElement).width,
+    (c) => (c as HTMLCanvasElement).clientWidth,
   );
   await page
     .getByLabel("Office roster")
@@ -37,7 +37,7 @@ test("release: idle pantry, actual walking, selected-worker and fallback evidenc
     .poll(() =>
       page
         .locator(".officeCanvas canvas")
-        .evaluate((c) => (c as HTMLCanvasElement).width),
+        .evaluate((c) => (c as HTMLCanvasElement).clientWidth),
     )
     .toBeLessThan(fullWidth);
   await page.evaluate(

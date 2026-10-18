@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { installSnapshotRoute } from "./snapshotRoute";
 import { populated } from "../office/fixtures";
-test("camera: opening details from Home keeps the whole floor framed", async ({
+test("camera: opening details from Home keeps the whole office framed", async ({
   page,
 }) => {
   await installSnapshotRoute(page, populated(1));
@@ -11,7 +11,7 @@ test("camera: opening details from Home keeps the whole floor framed", async ({
   });
   await page.getByRole("button", { name: "Home view", exact: true }).click();
   const fullWidth = await page.locator(".officeCanvas canvas").evaluate(
-    (c) => (c as HTMLCanvasElement).width,
+    (c) => (c as HTMLCanvasElement).clientWidth,
   );
   await page
     .getByRole("button", { name: "Engineering lead", exact: true })
@@ -20,7 +20,7 @@ test("camera: opening details from Home keeps the whole floor framed", async ({
     .poll(() =>
       page
         .locator(".officeCanvas canvas")
-        .evaluate((c) => (c as HTMLCanvasElement).width),
+        .evaluate((c) => (c as HTMLCanvasElement).clientWidth),
     )
     .toBeLessThan(fullWidth);
   await page.evaluate(

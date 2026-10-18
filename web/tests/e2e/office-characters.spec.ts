@@ -7,6 +7,7 @@ test("characters: stable lead identities, unknown workers, drag protection and m
   test.setTimeout(60000);
   const snap = populated(10);
   snap.sessions[10].agent = "alien";
+  snap.sessions[10].registered = false;
   const api = await installSnapshotRoute(page, snap);
   await page.goto("/");
   const scene = page.getByLabel("3D office", { exact: true }),
@@ -63,7 +64,7 @@ test("characters: ten workers, permanent identities, actor selection and drag pr
   await expect(scene.locator('[data-kind="human"]')).toHaveCount(1);
   await expect(
     page.getByLabel("Office roster").getByRole("button", { name: /^Worker / }),
-  ).toHaveCount(10);
+  ).toHaveCount(11);
   await scene
     .getByRole("button", { name: "Inspect Executive assistant", exact: true })
     .click();
@@ -83,5 +84,5 @@ test("characters: ten workers, permanent identities, actor selection and drag pr
     .click();
   await expect(
     page.getByRole("complementary", { name: "Office observation" }),
-  ).toContainText("Temporary worker");
+  ).toContainText("Session worker");
 });

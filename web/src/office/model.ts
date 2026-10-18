@@ -66,19 +66,34 @@ export function deriveSharedOfficeModel(snapshot: Snapshot): SharedOfficeModel {
     if (!sessionsById.has(d.targetId)) pendingAssignments.push({ delegationKey: d.key, targetId: d.targetId });
     children.set(d.originId, [...(children.get(d.originId) ?? []), d.targetId]);
   }
-  // Iterative DFS diagnoses cycles without gating membership or risking recursion depth.
-  const color = new Map<string, number>(), cyclic = new Set<string>();
+  // Iterative strongly connected components include every member of overlapping cycles.
+  const seen = new Set<string>(), order: string[] = [], reverse = new Map<string, string[]>();
+  for (const [parent, targets] of children)
+    for (const target of targets) reverse.set(target, [...(reverse.get(target) ?? []), parent]);
   for (const start of children.keys()) {
-    if (color.has(start)) continue;
+    if (seen.has(start)) continue;
     const stack: { id: string; cursor: number }[] = [{ id: start, cursor: 0 }];
-    color.set(start, 1);
+    seen.add(start);
     while (stack.length) {
       const frame = stack.at(-1)!, next = (children.get(frame.id) ?? [])[frame.cursor++];
-      if (next === undefined) { color.set(frame.id, 2); stack.pop(); }
-      else if (color.get(next) === 1) {
-        for (const f of stack.slice(stack.findIndex(f => f.id === next))) cyclic.add(f.id);
-      } else if (!color.has(next)) { color.set(next, 1); stack.push({ id: next, cursor: 0 }); }
+      if (next === undefined) { order.push(frame.id); stack.pop(); }
+      else if (!seen.has(next)) { seen.add(next); stack.push({ id: next, cursor: 0 }); }
     }
+  }
+  seen.clear();
+  const cyclic = new Set<string>();
+  for (const start of order.reverse()) {
+    if (seen.has(start)) continue;
+    const component: string[] = [], pending = [start];
+    seen.add(start);
+    while (pending.length) {
+      const id = pending.pop()!;
+      component.push(id);
+      for (const parent of reverse.get(id) ?? [])
+        if (!seen.has(parent)) { seen.add(parent); pending.push(parent); }
+    }
+    if (component.length > 1 || children.get(start)?.includes(start))
+      for (const id of component) cyclic.add(id);
   }
   for (const id of [...cyclic].sort())
     if (sessionsById.has(id)) diagnostics.push({ sessionId: id, message: "Recorded delegation cycle; session remains included." });

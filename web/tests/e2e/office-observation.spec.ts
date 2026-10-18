@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { installSnapshotRoute } from "./snapshotRoute";
 import { populated, session } from "../office/fixtures";
-test("observation: floor scope, department aggregates, worker details and existing drawer", async ({
+test("observation: global scope, department aggregates, worker details and existing drawer", async ({
   page,
 }) => {
   const snap = populated(2);
@@ -13,9 +13,8 @@ test("observation: floor scope, department aggregates, worker details and existi
   await expect(
     page.getByRole("button", { name: "Office", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByLabel("Conversation floor")).toContainText(
-    "Another project",
-  );
+  await expect(page.getByLabel("Conversation floor")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Worker Another project/ })).toBeVisible();
   await page
     .getByRole("button", { name: "Engineering lead", exact: true })
     .click();
@@ -35,7 +34,7 @@ test("observation: floor scope, department aggregates, worker details and existi
   await expect(page).toHaveURL(/session=worker-0/);
   await expect(details).toHaveCount(0);
 });
-test("observation: empty and unknown sessions are accessible without fabricated floors", async ({
+test("observation: unknown sessions remain accessible in the shared office", async ({
   page,
 }) => {
   await installSnapshotRoute(page, {
@@ -44,7 +43,7 @@ test("observation: empty and unknown sessions are accessible without fabricated 
     delegations: [],
   });
   await page.goto("/");
-  await expect(page.getByText("No conversation floor yet")).toBeVisible();
-  await page.getByText("Ungrouped sessions").click();
-  await expect(page.getByText(/No recorded path/)).toBeVisible();
+  await expect(page.locator(".officeCanvas canvas")).toBeVisible({ timeout: 20000 });
+  await page.getByRole("button", { name: /Worker Task orphan/ }).click();
+  await expect(page.getByRole("complementary", { name: "Office observation" })).toContainText("Unverified source");
 });

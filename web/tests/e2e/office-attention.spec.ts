@@ -1,16 +1,17 @@
 import { test, expect } from "@playwright/test";
 import { installSnapshotRoute } from "./snapshotRoute";
 import { populated, session, delegation } from "../office/fixtures";
-test("attention: other floors wait for click; health and failed handoffs stay distinct", async ({
+test("attention: other conversations wait for click; health and failed handoffs stay distinct", async ({
   page,
 }) => {
   const snap = populated(1);
   snap.sessions.push(
-    session("second", "coordinator", "done", { title: "Second floor" }),
+    session("second", "coordinator", "done", { title: "Second conversation" }),
   );
   const api = await installSnapshotRoute(page, snap);
   await page.goto("/");
-  await expect(page.getByLabel("Conversation floor")).toHaveValue("main");
+  await expect(page.getByLabel("Conversation floor")).toHaveCount(0);
+  await expect(page.getByLabel("3D office", { exact: true })).toHaveAttribute("data-pose", /position/, { timeout: 20000 });
   await page
     .getByRole("button", { name: "Focus Research", exact: true })
     .click();
@@ -26,9 +27,9 @@ test("attention: other floors wait for click; health and failed handoffs stay di
   snap.sessions[1].stale = true;
   snap.delegations.push(delegation("fail", "main", "missing", "failed"));
   api.setSnapshot(structuredClone(snap));
-  const notices = page.getByLabel("Floor attention");
+  const notices = page.getByLabel("Office attention");
   await expect(
-    notices.getByRole("button", { name: /^Needs you · Second floor/ }),
+    notices.getByRole("button", { name: /^Needs you · Task question/ }),
   ).toBeVisible();
   await expect(
     notices.getByRole("button", { name: /^Health ·/ }),
@@ -36,20 +37,20 @@ test("attention: other floors wait for click; health and failed handoffs stay di
   await expect(
     notices.getByRole("button", { name: /^Handoff failed ·/ }),
   ).toBeVisible();
-  await expect(page.getByLabel("Conversation floor")).toHaveValue("main");
+  await expect(page.getByLabel("Conversation floor")).toHaveCount(0);
   await expect(page.getByLabel("3D office", { exact: true })).toHaveAttribute(
     "data-pose",
     pose!,
   );
   await notices
-    .getByRole("button", { name: /^Needs you · Second floor/ })
+    .getByRole("button", { name: /^Needs you · Task question/ })
     .click();
-  await expect(page.getByLabel("Conversation floor")).toHaveValue("second");
+  await expect(page.getByLabel("Conversation floor")).toHaveCount(0);
   await expect(
     page.getByRole("complementary", { name: "Office observation" }),
   ).toContainText("Can we use this design?");
   await page.screenshot({
-    path: "test-results/office-evidence/other-floor-attention.png",
+    path: "test-results/office-evidence/shared-attention.png",
   });
 });
 test("reconnect: selection and camera survive outage, no arrival backlog or duplicate polling", async ({
@@ -66,8 +67,9 @@ test("reconnect: selection and camera survive outage, no arrival backlog or dupl
   await expect(page.locator(".officeCanvas canvas")).toBeVisible({
     timeout: 20000,
   });
+  await expect(page.getByLabel("3D office", { exact: true })).toHaveAttribute("data-pose", /position/);
   const fullWidth = await page.locator(".officeCanvas canvas").evaluate(
-    (c) => (c as HTMLCanvasElement).width,
+    (c) => (c as HTMLCanvasElement).clientWidth,
   );
   await page
     .getByRole("button", { name: "Focus Research", exact: true })
@@ -80,7 +82,7 @@ test("reconnect: selection and camera survive outage, no arrival backlog or dupl
     .poll(() =>
       page
         .locator(".officeCanvas canvas")
-        .evaluate((c) => (c as HTMLCanvasElement).width),
+        .evaluate((c) => (c as HTMLCanvasElement).clientWidth),
     )
     .toBeLessThan(fullWidth);
   await page.evaluate(

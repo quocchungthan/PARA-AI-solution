@@ -11,7 +11,7 @@ test("animation: observed arrival once, immediate attention midwalk, theme and p
     timeout: 20000,
   });
   api.setSnapshot(populated(1));
-  const worker = page.locator(".officeActorLabel[data-kind=worker]");
+  const worker = page.locator('.officeActorLabel[data-kind=worker][data-identity="worker-0"]');
   await expect(worker).toHaveAttribute("data-phase", "entering");
   const started = await worker.getAttribute("data-phase-start");
   await page.getByRole("button", { name: "Toggle theme" }).click();
@@ -39,6 +39,6 @@ test("animation: reduced motion seats arrivals immediately and idle leads use fr
   });
   await expect(page.locator("[data-rest=lounge]")).toHaveCount(2);
   api.setSnapshot(populated(1));
-  const w = page.locator(".officeActorLabel[data-kind=worker]");
+  const w = page.locator('.officeActorLabel[data-kind=worker][data-identity="worker-0"]');
   await expect(w).toHaveAttribute("data-motion", "reduced");
 });

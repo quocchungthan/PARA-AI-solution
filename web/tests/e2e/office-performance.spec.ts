@@ -10,13 +10,12 @@ test("performance: maximum population and measured 30-second interaction sample"
   const snap = populated(10);
   snap.sessions.push(
     session("second", "coordinator", "needs_human", {
-      title: "Another floor",
+      title: "Another conversation",
       question: "Choose a plan",
     }),
   );
   const api = await installSnapshotRoute(page, snap);
   await page.goto("/");
-  await page.getByLabel("Conversation floor").selectOption("main");
   const canvas = page.locator(".officeCanvas canvas");
   await expect(canvas).toBeVisible({ timeout: 20000 });
   await expect(canvas).toHaveAttribute("data-draw-calls", /^\d+$/);
