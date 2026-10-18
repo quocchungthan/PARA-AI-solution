@@ -187,7 +187,9 @@ export function OfficePanel() {
                     </Suspense>
                   </SceneBoundary>
                   <span className="officeSceneHint">
-                    Drag to pan · Scroll to zoom · Click to inspect
+                    {compact
+                      ? "Drag to orbit · Two fingers to pan/pinch · Tap to inspect"
+                      : "Drag to orbit · Shift/right-drag to pan · Scroll to zoom · Click to inspect"}
                   </span>
                 </>
               )}

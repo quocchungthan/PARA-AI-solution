@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { useThree } from "@react-three/fiber";
-import { Box3, Vector3, MOUSE, OrthographicCamera } from "three";
+import { Box3, Vector3, MOUSE, TOUCH, MathUtils, OrthographicCamera } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { OfficeLayout } from "../layout";
 import type { CameraPose, OfficeCameraHandle } from "../types";
@@ -22,10 +22,14 @@ export function OfficeCamera({
   useEffect(() => {
     const c = camera as OrthographicCamera;
     const controls = new OrbitControls(c, gl.domElement);
-    controls.enableRotate = false;
+    controls.enableRotate = true;
     controls.enableDamping = false;
-    controls.mouseButtons.LEFT = MOUSE.PAN;
+    controls.minPolarAngle = MathUtils.degToRad(10);
+    controls.maxPolarAngle = MathUtils.degToRad(85);
+    controls.mouseButtons.LEFT = MOUSE.ROTATE;
     controls.mouseButtons.RIGHT = MOUSE.PAN;
+    controls.touches.ONE = TOUCH.ROTATE;
+    controls.touches.TWO = TOUCH.DOLLY_PAN;
     controls.screenSpacePanning = true;
     controls.zoomSpeed = 0.7;
     controls.panSpeed = 0.8;
@@ -88,8 +92,9 @@ export function OfficeCamera({
         if (!r) return;
         fitZoom = homeZoom;
         zoomBounds();
+        const offset = c.position.clone().sub(controls.target);
         controls.target.set(r.x + r.width / 2, 0, r.z + r.depth / 2);
-        c.position.copy(controls.target).add(new Vector3(-26, 28, 40));
+        c.position.copy(controls.target).add(offset);
         c.zoom = homeZoom * 1.85;
         c.updateProjectionMatrix();
         controls.update();
