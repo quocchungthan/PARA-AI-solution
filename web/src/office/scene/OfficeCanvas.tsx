@@ -16,6 +16,7 @@ import { Actors, describeActors } from "./Actors";
 import { Labels, type LabelAnchor } from "./Labels";
 import { Handoffs } from "./Handoffs";
 import { SceneMetrics } from "./resources";
+import {sessionActorId} from '../runtime';
 export type OfficeCanvasProps = {
   style: OfficeStyleDefinition;
   cutaway?: boolean;
@@ -83,6 +84,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
           <Canvas
             key={generation}
             orthographic
+            frameloop="demand"
             camera={{ position: [-26, 28, 40], near: 0.1, far: 180, zoom: 15 }}
             // Supersample standard displays; cap high-density screens at 2x.
             dpr={[1.5, 2]}
@@ -136,7 +138,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
               .filter((e) => e.startedAt !== undefined)
               .slice(0, 2)
               .map((e) => (
-                <span key={e.id} data-event-kind={e.kind}>
+                <span key={e.id} data-event-kind={e.kind} data-event-id={e.id} data-origin-actor={e.originId?sessionActorId(e.originId):undefined} data-target-actor={sessionActorId(e.sessionId)}>
                   {e.kind === "arrive"
                     ? "Arrival"
                     : e.kind === "report"

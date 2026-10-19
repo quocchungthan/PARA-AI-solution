@@ -139,18 +139,19 @@ export const box = (
 ) => list.push({ position, size, color, rotation });
 // Low-frequency renderer diagnostics used by the verification harness; no global state or polling.
 export function SceneMetrics({styleId='botanical',label='Botanical Studio'}:{styleId?:string;label?:string}) {
-  const {gl}=useThree();
-  useEffect(()=>{gl.domElement.setAttribute('aria-label',`${label} office scene`);gl.domElement.dataset.style=styleId;},[gl,label,styleId]);
-  const last = useRef(0);
-  useFrame(({ gl, clock }) => {
-    if (clock.elapsedTime - last.current < 1) return;
-    last.current = clock.elapsedTime;
-    const data = gl.domElement.dataset;
-    data.drawCalls = String(gl.info.render.calls);
-    data.triangles = String(gl.info.render.triangles);
-    data.geometries = String(gl.info.memory.geometries);
-    data.textures = String(gl.info.memory.textures);
-    data.renderDpr = String(gl.getPixelRatio());
+  const {gl}=useThree(),renders=useRef(0),alive=useRef(true);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
+  useEffect(()=>{gl.domElement.setAttribute('aria-label',label+' office scene');gl.domElement.dataset.style=styleId;},[gl,label,styleId]);
+  useFrame(({gl,scene})=>{
+    queueMicrotask(()=>{
+      if(!alive.current)return;
+      const data=gl.domElement.dataset;
+      data.renderCount=String(++renders.current);data.drawCalls=String(gl.info.render.calls);
+      data.triangles=String(gl.info.render.triangles);data.geometries=String(gl.info.memory.geometries);
+      data.textures=String(gl.info.memory.textures);data.renderDpr=String(gl.getPixelRatio());
+      const cast=new Set<string>();scene.traverse(o=>{if(typeof o.userData.castId==='string')cast.add(o.userData.castId);});
+      data.castIds=JSON.stringify([...cast].sort());
+    });
   });
   return null;
 }

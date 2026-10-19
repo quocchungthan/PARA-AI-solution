@@ -44,7 +44,8 @@ export const PRECINCT_LAYOUT:OfficeLayout = {
   doors:[[8.8,0,0],[16,0,0],[24,0,7.8],[24,0,13.5],[6.2,0,18]],
   seats,leads:Object.fromEntries(seats.filter(s=>s.reservedFor).map(s=>[s.reservedFor,s.position])) as OfficeLayout['leads'],
   human:[29.2,0,13.2],humanRotation:-Math.PI/2,entry:[1.5,0,8],
-  restSeats:[1.7,3.2].map((x,i)=>({id:'break-sofa-'+i,position:[x,0,24.45] as Vec3,approach:[x,0,23.25] as Vec3,rotation:Math.PI})),
+  restSeats:[...[1.7,3.2].map((x,i)=>({id:'break-sofa-'+i,position:[x,0,24.45] as Vec3,approach:[x,0,23.25] as Vec3,rotation:Math.PI})),
+    {id:'kitchen-coffee',position:[2.8,0,4.25],approach:[2,0,4.25],rotation:Math.PI/2}],
   walkGraph:{nodes:[],edges:[]},
 };
 PRECINCT_LAYOUT.walkGraph=createWalkGraph(PRECINCT_LAYOUT);

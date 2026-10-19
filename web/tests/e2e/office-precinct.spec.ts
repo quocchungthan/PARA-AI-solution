@@ -1,0 +1,48 @@
+import {test,expect} from '@playwright/test';
+import {installSnapshotRoute} from './snapshotRoute';
+import {populated,snapshot,session,delegation} from '../office/fixtures';
+test.setTimeout(90000);
+test('precinct cast preserves real labels and reports to two exact source sessions',async({page})=>{
+  const snap=snapshot([session('a','coordinator'),session('b','coordinator'),session('w','coder')],[delegation('aw','a','w'),delegation('bw','b','w')]);
+  const api=await installSnapshotRoute(page,snap);await page.goto('/');
+  await page.getByLabel('Office style',{exact:true}).selectOption('precinct');
+  const canvas=page.locator('.officeCanvas canvas');
+  await expect(canvas).toHaveAttribute('data-cast-ids',/Holt/,{timeout:20000});
+  const cast=JSON.parse((await canvas.getAttribute('data-cast-ids'))!);
+  for(const name of ['Holt','Amy','Jake','Rosa','Boyle','Terry','Gina','Kevin'])expect(cast).toContain(name);
+  await page.locator('.officeSceneRegion').screenshot({path:'test-results/office-evidence/precinct-cast-overview.png'});
+  await expect(page.locator('.officeActorLabel[data-kind="worker"]')).toHaveCount(3);
+  await expect(page.getByLabel('Inspect Task w',{exact:true})).toHaveCount(1);
+  snap.sessions[2].state='done';snap.delegations.forEach(d=>d.status='result_fed');api.setSnapshot(structuredClone(snap));
+  await expect(page.locator('[data-event-kind="report"]')).toHaveCount(2);
+  const endpoints=await page.locator('[data-event-kind="report"]').evaluateAll(nodes=>nodes.map(n=>[(n as HTMLElement).dataset.originActor,(n as HTMLElement).dataset.targetActor]).sort());
+  expect(endpoints).toEqual([[JSON.stringify(['session','a']),JSON.stringify(['session','w'])],[JSON.stringify(['session','b']),JSON.stringify(['session','w'])]]);
+  await page.getByRole('button',{name:'Focus Break room',exact:true}).click();
+  await page.locator('.officeSceneRegion').screenshot({path:'test-results/office-evidence/precinct-cast-lounge.png'});
+  await page.getByRole('button',{name:'Focus Captain’s office',exact:true}).click();
+  await page.locator('.officeSceneRegion').screenshot({path:'test-results/office-evidence/precinct-cast-captain.png'});
+});
+test('optional visits yield to reduced motion and selected records can disappear without stale workers',async({page})=>{
+  await page.clock.install();
+  const api=await installSnapshotRoute(page,snapshot());await page.goto('/');
+  await page.getByLabel('Office style',{exact:true}).selectOption('precinct');
+  const canvas=page.locator('.officeCanvas canvas');
+  await expect(canvas).toHaveAttribute('data-cast-ids',/Holt/,{timeout:20000});
+  await page.clock.fastForward(41000);
+  await expect(canvas).toHaveAttribute('data-ambient-actor',/lead-|assistant/);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await expect(canvas).toHaveAttribute('data-ambient-actor','');
+  api.setSnapshot(populated(1));await page.clock.fastForward(2500);
+  await expect(page.locator('.officeActorLabel[data-kind="worker"]')).toHaveCount(2);
+  await page.locator('.officeSession').filter({hasText:'Task worker-0'}).click();
+  api.setSnapshot(snapshot());await page.clock.fastForward(2500);
+  await expect(page.locator('.officeActorLabel[data-kind="worker"]')).toHaveCount(0);
+  await expect(page.getByRole('complementary',{name:'Office observation'})).toContainText('Session unavailable');
+});
+test('a reduced-motion idle precinct settles between source updates',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});await installSnapshotRoute(page,snapshot());await page.goto('/');
+  await page.getByLabel('Office style',{exact:true}).selectOption('precinct');
+  const canvas=page.locator('.officeCanvas canvas');await expect(canvas).toHaveAttribute('data-render-count',/^\d+$/,{timeout:20000});
+  await page.waitForTimeout(500);const start=Number(await canvas.getAttribute('data-render-count'));
+  await page.waitForTimeout(700);expect(Number(await canvas.getAttribute('data-render-count'))-start).toBeLessThan(4);
+});

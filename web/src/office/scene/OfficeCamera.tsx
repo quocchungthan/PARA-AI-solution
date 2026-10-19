@@ -24,25 +24,31 @@ export function OfficeCamera({layout,views,pose,focusRoom,onChange,controllerRef
       const v=new Vector3(x,y,z).applyMatrix4(c.matrixWorldInverse);maxX=Math.max(maxX,Math.abs(v.x));maxY=Math.max(maxY,Math.abs(v.y));
     }
     const homeZoom=Math.min(size.width/(maxX*2.2),size.height/(maxY*2.2));
-    controls.minZoom=homeZoom*.6;controls.maxZoom=homeZoom*3.2;
+    const initial=latest.current.pose;
+    // Notices change scene height without changing the user's viewport width.
+    // Preserve that presentation; a width resize or explicit view fits afresh.
+    let fitZoom=initial?.viewportWidth===size.width&&initial.homeZoom?initial.homeZoom:homeZoom;
+    const zoomBounds=()=>{controls.minZoom=fitZoom*.6;controls.maxZoom=fitZoom*3.2;};
+    zoomBounds();
     function save() {
-      latest.current.onChange({position:c.position.toArray() as [number,number,number],target:controls.target.toArray() as [number,number,number],zoom:c.zoom,homeZoom,viewportWidth:size.width});invalidate();
+      latest.current.onChange({position:c.position.toArray() as [number,number,number],target:controls.target.toArray() as [number,number,number],zoom:c.zoom,homeZoom:fitZoom,viewportWidth:size.width});invalidate();
     }
     function focusView(id:string) {
       const v=views[id];if(!v)return;
+      fitZoom=homeZoom;zoomBounds();
       c.position.set(...v.position);controls.target.set(...v.target);c.zoom=homeZoom*v.zoomRatio;c.updateProjectionMatrix();controls.update();save();
     }
     function focus(id:string) {
       if(views[id])return focusView(id);
       const room=layout.rooms.find(r=>r.id===id);if(!room)return focusView('overview');
+      fitZoom=homeZoom;zoomBounds();
       const offset=c.position.clone().sub(controls.target);controls.target.set(room.x+room.width/2,0,room.z+room.depth/2);
       c.position.copy(controls.target).add(offset);c.zoom=homeZoom*1.85;c.updateProjectionMatrix();controls.update();save();
     }
     controllerRef.current={home:()=>focusView('overview'),focusRoom:focus,focusView};
-    const initial=latest.current.pose;
     if(initial) {
       c.position.set(...initial.position);controls.target.set(...initial.target);
-      c.zoom=Math.max(controls.minZoom,Math.min(controls.maxZoom,initial.homeZoom?initial.zoom/initial.homeZoom*homeZoom:initial.zoom));
+      c.zoom=Math.max(controls.minZoom,Math.min(controls.maxZoom,initial.viewportWidth!==size.width&&initial.homeZoom?initial.zoom/initial.homeZoom*homeZoom:initial.zoom));
       c.updateProjectionMatrix();controls.update();save();
     }else if(latest.current.focusRoom)focus(latest.current.focusRoom);else focusView('overview');
     const redraw=()=>invalidate();controls.addEventListener('change',redraw);controls.addEventListener('end',save);
