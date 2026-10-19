@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   BoxGeometry,
   MeshLambertMaterial,
@@ -138,7 +138,9 @@ export const box = (
   rotation = 0,
 ) => list.push({ position, size, color, rotation });
 // Low-frequency renderer diagnostics used by the verification harness; no global state or polling.
-export function SceneMetrics() {
+export function SceneMetrics({styleId='botanical',label='Botanical Studio'}:{styleId?:string;label?:string}) {
+  const {gl}=useThree();
+  useEffect(()=>{gl.domElement.setAttribute('aria-label',`${label} office scene`);gl.domElement.dataset.style=styleId;},[gl,label,styleId]);
   const last = useRef(0);
   useFrame(({ gl, clock }) => {
     if (clock.elapsedTime - last.current < 1) return;

@@ -143,7 +143,7 @@ function detectNewTasks(snap: Snapshot) {
   }
   const fresh = snap.sessions.filter((s) => !seen!.has(s.sessionId));
   ids.forEach((id) => seen!.add(id));
-  localStorage.setItem(SEEN_KEY, JSON.stringify(ids));
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify(ids)); } catch { /* Optional persistence must not make a valid snapshot offline. */ }
   if (!fresh.length) return;
   const at = Date.now();
   const added = fresh.map((s): Notice => ({
@@ -219,5 +219,5 @@ export function connect() {
 
 export function toggleTheme() {
   dark.value = !dark.value;
-  localStorage.setItem("bridge-theme", dark.value ? "dark" : "light");
+  try { localStorage.setItem("bridge-theme", dark.value ? "dark" : "light"); } catch { /* Keep the in-memory theme usable when storage is denied. */ }
 }

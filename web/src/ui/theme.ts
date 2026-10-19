@@ -6,14 +6,14 @@ function readInitialDark(): boolean {
     if (attr === "light") return false;
     if (attr === "dark") return true;
   }
-  if (typeof localStorage !== "undefined") {
-    try {
+  try {
+    if (typeof localStorage !== "undefined") {
       const saved = localStorage.getItem("bridge-theme") ?? localStorage.getItem("para-theme");
       if (saved === "light") return false;
       if (saved === "dark") return true;
-    } catch {
-      /* ignore storage errors */
     }
+  } catch {
+    /* ignore storage errors */
   }
   return true;
 }
@@ -36,12 +36,12 @@ export function setTheme(mode: "dark" | "light") {
   if (typeof document !== "undefined") {
     document.documentElement.dataset.theme = mode;
   }
-  if (typeof localStorage !== "undefined") {
-    try {
+  try {
+    if (typeof localStorage !== "undefined") {
       localStorage.setItem("bridge-theme", mode);
-    } catch {
-      /* ignore storage errors */
     }
+  } catch {
+    /* ignore storage errors */
   }
 }
 

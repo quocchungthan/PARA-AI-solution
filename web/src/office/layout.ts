@@ -26,6 +26,7 @@ export type OfficeLayout = {
   seats: readonly Seat[];
   leads: Record<Exclude<OfficeRole, "unknown">, Vec3>;
   human: Vec3;
+  humanRotation: number;
   entry: Vec3;
   floorAreas: readonly Rect[];
   restSeats: readonly { id: string; position: Vec3; approach: Vec3; rotation: number }[];

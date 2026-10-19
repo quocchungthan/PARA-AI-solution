@@ -30,7 +30,7 @@ const walls: Wall[] = [
   wall(0,-5,0,25.3,.65),wall(0,-5,4,-5,3.25),wall(4,-5,4,-1.5),
   wall(11,-6,24,-6,3.25),wall(11,-6,11,-1.5),wall(24,-6,24,0),
   wall(0,0,7.8,0,3.25),wall(9.8,0,15,0),wall(17,0,24,0),
-  wall(31.4,3.2,31.4,18,3.25),wall(24,3.2,31.4,3.2,3.25),wall(24,10,31.4,10,3.25),
+  wall(31.4,3.2,31.4,18,.8),wall(24,3.2,31.4,3.2,3.25),wall(24,10,31.4,10,3.25),
   wall(24,3.2,24,6.8),wall(24,8.8,24,12.5),wall(24,14.5,24,18),
   wall(0,18,5.2,18),wall(7.2,18,7.4,18),
 ];
@@ -43,7 +43,7 @@ export const PRECINCT_LAYOUT:OfficeLayout = {
   obstacles:[...PRECINCT_FIXTURES.map(f=>f.footprint),...wallRects],walls,
   doors:[[8.8,0,0],[16,0,0],[24,0,7.8],[24,0,13.5],[6.2,0,18]],
   seats,leads:Object.fromEntries(seats.filter(s=>s.reservedFor).map(s=>[s.reservedFor,s.position])) as OfficeLayout['leads'],
-  human:[29.2,0,13.2],entry:[1.5,0,8],
+  human:[29.2,0,13.2],humanRotation:-Math.PI/2,entry:[1.5,0,8],
   restSeats:[1.7,3.2].map((x,i)=>({id:'break-sofa-'+i,position:[x,0,24.45] as Vec3,approach:[x,0,23.25] as Vec3,rotation:Math.PI})),
   walkGraph:{nodes:[],edges:[]},
 };

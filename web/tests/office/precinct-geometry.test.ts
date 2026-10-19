@@ -27,3 +27,9 @@ test('approved furniture orientation and collision footprints are shared with sc
   assert.ok(buildKitchenette(l,p).boxes.some(v=>v.color===p.navy));
   assert.ok(buildOffices(l,p).panels.some(v=>v.surface==='flag'));
 });
+test('captain cutaway opens the near bookcase so the manager remains visible',()=>{
+  const full=buildOffices(l,p),cut=buildOffices(l,p,true);
+  const nearShelf=(v:{position:readonly number[]})=>v.position[0]>30.1&&v.position[2]>10.5&&v.position[2]<17.5;
+  assert.ok(full.boxes.some(v=>nearShelf(v)&&v.position[1]+v.size[1]/2>3));
+  assert.ok(cut.boxes.filter(nearShelf).every(v=>v.position[1]+v.size[1]/2<=1.3+1e-6));
+});

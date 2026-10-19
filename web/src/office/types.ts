@@ -33,6 +33,7 @@ export type CameraPose = {
 };
 export type OfficeCameraHandle = {
   home(): void;
+  focusView(viewId: string): void;
   focusRoom(roomId: string): void;
 };
 export type WorkerSlot = {

@@ -40,6 +40,7 @@ effect(() => {
       deriveSharedOfficeModel(snap),
       online,
       nowMs,
+      preferences,
     );
   else {
     if (snap !== lastSnapshot)

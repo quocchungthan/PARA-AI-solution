@@ -10,7 +10,7 @@ import {PrecinctResources} from './resources';
 export default function PrecinctScene({theme,cutaway,children}:{theme:'light'|'dark';cutaway:boolean;children?:ReactNode}) {
   const p=useMemo(()=>precinctPalette(theme),[theme]);
   const geometry=useMemo(()=>{
-    const parts=[buildPrecinctShell(PRECINCT_LAYOUT,p,cutaway),buildBullpen(PRECINCT_LAYOUT,p),buildBreakRoom(PRECINCT_LAYOUT,p),buildKitchenette(PRECINCT_LAYOUT,p),buildOffices(PRECINCT_LAYOUT,p)];
+    const parts=[buildPrecinctShell(PRECINCT_LAYOUT,p,cutaway),buildBullpen(PRECINCT_LAYOUT,p),buildBreakRoom(PRECINCT_LAYOUT,p),buildKitchenette(PRECINCT_LAYOUT,p),buildOffices(PRECINCT_LAYOUT,p,cutaway)];
     return {boxes:parts.flatMap(g=>g.boxes),rounds:parts.flatMap(g=>g.rounds),panels:parts.flatMap(g=>g.panels)};
   },[p,cutaway]);
   return <><color attach="background" args={[p.background]}/>

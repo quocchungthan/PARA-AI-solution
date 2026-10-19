@@ -139,6 +139,7 @@ export const BOTANICAL_LAYOUT: OfficeLayout = {
   seats,
   leads,
   human: [-5, 0, -5.8],
+  humanRotation: Math.PI,
   entry: [11.5, 0, 9.5],
   floorAreas: [{ x: -15, z: -10, width: 30, depth: 20 }],
   restSeats: [11.5,13].map((x,i) => ({ id: 'lounge-'+i, position: [x,0,6.5] as Vec3, approach: [x,0,7.5] as Vec3, rotation: 0 })),

@@ -2,7 +2,7 @@ import type {OfficeLayout} from '../../layout';
 import type {PrecinctPalette} from './palette';
 import {details} from './details';
 import {PRECINCT_FIXTURES} from './fixtures';
-export function buildOffices(_layout:OfficeLayout,C:PrecinctPalette){const b=details(C);const {box,group,cylinder,ball,rod,ring,panel,furniture,walls,mug,book,papers,chair,monitor,phone,cabinet,desk,microwave,badgeTexture,flagTexture}=b;
+export function buildOffices(_layout:OfficeLayout,C:PrecinctPalette,cutaway=false){const b=details(C);const {box,group,cylinder,ball,rod,ring,panel,furniture,walls,mug,book,papers,chair,monitor,phone,cabinet,desk,microwave,badgeTexture,flagTexture}=b;
 const office=group(27.7,13.2,Math.PI/2);box(office,0,1.5,0,3.8,.18,1.65,'#76533b');for(const x of [-1.55,1.55])box(office,x,.7,0,.55,1.4,1.35,'#694a34');monitor(office,-.65,-.25);phone(office,.75,-.24,1.61);papers(office,.66,1.64,.42);mug(office,-1.25,1.61,.25,'#ddd9c8');chair(office,0,1.5,Math.PI,'#303e37');chair(office,-.9,-1.6,0,'#3e4b43');chair(office,1.0,-1.6,0,'#3e4b43');panel(office,1.35,1.9,-.48,.33,.35,badgeTexture);
 const shelves=group(30.7,14);box(shelves,0,1.65,0,.6,3.3,6.4,'#6d4c36');for(let iz=0;iz<4;iz++){for(let iy=0;iy<3;iy++){const z=-2.45+iz*1.6,y=.53+iy*.96;box(shelves,-.34,y+.38,z,.12,.08,1.5,'#956f4b');for(let i=0;i<4;i++)box(shelves,-.4,y+.05,z-.5+i*.2,.12,.5+((i+iy)%2)*.14,.14,['#a99b62','#446b60','#995446','#b9b395'][(i+iz)%4])}}cylinder(shelves,-.45,2.78,-2.3,.17,.3,'#b39b4d');
 panel(walls,27.1,2.5,10.15,1.3,.8,flagTexture);panel(walls,28.85,2.4,10.15,.64,.72,badgeTexture);
@@ -19,4 +19,13 @@ for(const f of PRECINCT_FIXTURES.filter(f=>f.id.startsWith('briefing-')||f.id===
 for(const s of _layout.seats.filter(s=>!s.id.startsWith('bullpen-')&&s.id!=='side-desk'))chair(furniture,s.position[0],s.position[2],s.rotation,'#465565');
 box(furniture,17.5,2,-5.73,4.6,1.7,.12,'#2e4845');
 
-return b.geometry();}
+const result=b.geometry();
+if(!cutaway)return result;
+const nearShelf=(p:readonly number[])=>p[0]>30.1&&p[2]>10.5&&p[2]<17.5;
+return {...result,boxes:result.boxes.flatMap(v=>{
+ if(!nearShelf(v.position))return [v];
+ const bottom=v.position[1]-v.size[1]/2,top=Math.min(1.3,v.position[1]+v.size[1]/2);
+ if(bottom>=top)return [];
+ return [{...v,position:[v.position[0],(bottom+top)/2,v.position[2]] as const,size:[v.size[0],top-bottom,v.size[2]] as const}];
+}),rounds:result.rounds.filter(v=>!nearShelf(v.position)||v.position[1]<1.3)};
+}

@@ -160,6 +160,9 @@
   border-radius: 5px;
   padding: 4px 6px;
 }
+.officeCameraControls label { pointer-events: auto; display:flex; align-items:center; gap:4px; font-size:10px; background:var(--surface); border-radius:5px; padding:3px 5px; }
+.officeStyleControl select { max-width:155px; min-width:0; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:4px; font:inherit; padding:2px; }
+.officeCameraControls input { margin:0; }
 .officeSceneHint {
   position: absolute;
   bottom: 9px;

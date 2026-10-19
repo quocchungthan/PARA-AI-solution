@@ -9,7 +9,7 @@ import type {
   CameraPose,
   Vec3,
 } from "../types";
-import { OFFICE_LAYOUT } from "../layout";
+import type { OfficeStyleDefinition } from "../styles/types";
 import { OfficeScene } from "./OfficeScene";
 import { OfficeCamera } from "./OfficeCamera";
 import { Actors, describeActors } from "./Actors";
@@ -17,6 +17,11 @@ import { Labels, type LabelAnchor } from "./Labels";
 import { Handoffs } from "./Handoffs";
 import { SceneMetrics } from "./resources";
 export type OfficeCanvasProps = {
+  style: OfficeStyleDefinition;
+  cutaway?: boolean;
+  sceneRetry?: number;
+  focusRoom?: string | null;
+  onFocusRoom?: (id:string)=>void;
   runtime: SharedOfficeRuntime;
   model: SharedOfficeModel;
   theme: "light" | "dark";
@@ -36,18 +41,11 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
     down = useRef<[number, number]>([0, 0]);
   const [lost, setLost] = useState(false),
     [generation, setGeneration] = useState(0);
+  const layout=props.style.layout;
   const actors = describeActors(props);
   const anchors: LabelAnchor[] = [
     ...actors.map((a) => ({ id: a.id, actorId: a.id, position: a.position })),
-    ...OFFICE_LAYOUT.rooms.map((r) => ({
-      id: `room-${r.id}`,
-      roomId: r.id,
-      position: [
-        r.x + r.width / 2,
-        3.8,
-        r.id === "team" ? -0.9 : r.id === "pantry" ? 2 : r.z + 0.6,
-      ] as Vec3,
-    })),
+    ...Object.entries(props.style.labelAnchors).map(([id,p])=>({id:`room-${id}`,roomId:id,position:[p[0],3.8,p[2]] as Vec3})),
   ];
   useEffect(() => {
     const element = container.current;
@@ -96,18 +94,21 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
             onCreated={({ gl }) =>
               gl.domElement.setAttribute(
                 "aria-label",
-                "Botanical Studio office scene",
+                `${props.style.label} office scene`,
               )
             }
           >
             <OfficeCamera
-              layout={OFFICE_LAYOUT}
+              key={props.style.id}
+              layout={layout}
+              views={props.style.views}
+              focusRoom={props.focusRoom}
               pose={props.runtime.camera}
               onChange={props.onCameraChange}
               controllerRef={props.cameraRef}
               reducedMotion={props.reducedMotion}
             />
-            <OfficeScene layout={OFFICE_LAYOUT} theme={props.theme}>
+            <OfficeScene key={props.style.id} layout={layout} theme={props.theme} styleId={props.style.id} cutaway={props.cutaway} retry={props.sceneRetry}>
               <Actors
                 actors={actors}
                 registry={registry}
@@ -128,7 +129,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
               />
             </OfficeScene>
             <Labels anchors={anchors} registry={registry} elements={elements} />
-            <SceneMetrics />
+            <SceneMetrics styleId={props.style.id} label={props.style.label} />
           </Canvas>
           <div className="officeSignals" aria-hidden="true">
             {props.runtime.queue
@@ -204,7 +205,7 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
                 </span>
               </button>
             ))}
-            {OFFICE_LAYOUT.rooms.map((r) => (
+            {layout.rooms.map((r) => (
               <button
                 key={r.id}
                 className="officeRoomLabel"
@@ -213,9 +214,9 @@ export default function OfficeCanvas(props: OfficeCanvasProps) {
                   else elements.current.delete(`room-${r.id}`);
                 }}
                 aria-label={`Room ${r.name}`}
-                onClick={() => props.cameraRef.current?.focusRoom(r.id)}
+                onClick={() => {props.cameraRef.current?.focusRoom(r.id);props.onFocusRoom?.(r.id);}}
               >
-                {r.id === "management"
+                {props.style.id === "precinct" ? r.name.toUpperCase() : r.id === "management"
                   ? "MANAGER + ASSISTANT"
                   : r.id === "team"
                     ? "TEAM"

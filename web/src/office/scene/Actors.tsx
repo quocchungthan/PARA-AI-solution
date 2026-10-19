@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import type { Group } from "three";
 import type { OfficeCanvasProps } from "./OfficeCanvas";
 import { Character, type CharacterKind } from "./Character";
-import { OFFICE_LAYOUT as l } from "../layout";
+
 import { OFFICE_ROLES, ROLE_NAMES, officeRole } from "../roles";
 import { presentSession, sessionTitle } from "../model";
 import type { OfficeRole, SharedOfficeSelection, Vec3, WorkerSlot } from "../types";
@@ -25,9 +25,10 @@ export type ActorDescriptor = {
   rest?: "lounge" | "desk";
 };
 export function describeActors(props: OfficeCanvasProps): ActorDescriptor[] {
+  const l=props.style.layout;
   const actors: ActorDescriptor[] = [{
     id: "human", label: "You · manager", kind: "human", role: "coordinator",
-    position: l.human, rotation: Math.PI, status: "human", health: false,
+    position: l.human, rotation: l.humanRotation, status: "human", health: false,
     selection: { kind: "human" }, identitySeed: "human",
   }];
   let loungeIndex = 0;
@@ -35,7 +36,7 @@ export function describeActors(props: OfficeCanvasProps): ActorDescriptor[] {
     const d = props.model.departments.find(d => d.agent === role)!;
     const seat = l.seats.find(s => s.reservedFor === role);
     const idle = d.unfinished === 0;
-    const lounge = idle && loungeIndex < l.restSeats.length ? l.restSeats[loungeIndex++] : null;
+    const lounge = props.style.id === "botanical" && idle && loungeIndex < l.restSeats.length ? l.restSeats[loungeIndex++] : null;
     actors.push({
       id: role === "coordinator" ? "assistant" : `lead-${role}`,
       label: role === "coordinator" ? "Executive assistant" : `${ROLE_NAMES[role]} lead`,
@@ -95,6 +96,7 @@ function Actor({
   onSelect: OfficeCanvasProps["onSelect"];
   props: OfficeCanvasProps;
 }) {
+  const l=props.style.layout;
   const group = useRef<Group>(null);
   const initial = useRef(a.position);
   const visit = useRef<{ path: readonly Vec3[]; started: number } | null>(null);
@@ -112,6 +114,7 @@ function Actor({
         )
         : [a.position],
     [
+      l,
       a.worker?.phase,
       a.worker?.seatId,
       a.worker?.phaseStartedAt,
