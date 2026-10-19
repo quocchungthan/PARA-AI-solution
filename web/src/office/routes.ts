@@ -3,11 +3,15 @@ import type { Vec3, WorkerSlot, SharedOfficeModel } from "./types";
 export const distance = (a: Vec3, b: Vec3) =>
   Math.hypot(a[0] - b[0], a[2] - b[2]);
 export function isWalkable(l: OfficeLayout, p: Vec3) {
+  const onFloor = (x: number, z: number) => l.floorAreas.some(r =>
+    x >= r.x && x <= r.x+r.width && z >= r.z && z <= r.z+r.depth);
   return (
     p[0] > l.bounds.x + 0.2 &&
     p[0] < l.bounds.x + l.bounds.width - 0.2 &&
     p[2] > l.bounds.z + 0.2 &&
     p[2] < l.bounds.z + l.bounds.depth - 0.2 &&
+    onFloor(p[0],p[2]) &&
+    [[-.2,0],[.2,0],[0,-.2],[0,.2]].every(([x,z]) => onFloor(p[0]+x,p[2]+z)) &&
     !l.obstacles.some(
       (r) =>
         p[0] > r.x - 0.2 &&
@@ -69,13 +73,13 @@ export function findRoute(
   // Only the final front-to-cushion segment is a seating transition. The
   // circulation graph excludes the entire sofa, its backrest, arms and table.
   const access = (p: Vec3) => {
-    const i = l.lounge.findIndex(
-      (seat, i) =>
-        Math.abs(p[0] - seat[0]) < 0.01 &&
-        p[2] >= seat[2] &&
-        p[2] <= l.loungeApproaches[i][2],
-    );
-    return i < 0 ? p : l.loungeApproaches[i];
+    const seat = l.restSeats.find(s => {
+      const a=s.position, b=s.approach;
+      return Math.abs((p[0]-a[0])*(b[2]-a[2])-(p[2]-a[2])*(b[0]-a[0])) < .001 &&
+        p[0]>=Math.min(a[0],b[0])-.001 && p[0]<=Math.max(a[0],b[0])+.001 &&
+        p[2]>=Math.min(a[2],b[2])-.001 && p[2]<=Math.max(a[2],b[2])+.001;
+    });
+    return seat ? seat.approach : p;
   };
   const walkFrom = access(from),
     walkTo = access(to);

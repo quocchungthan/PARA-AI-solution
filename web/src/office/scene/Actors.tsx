@@ -35,12 +35,12 @@ export function describeActors(props: OfficeCanvasProps): ActorDescriptor[] {
     const d = props.model.departments.find(d => d.agent === role)!;
     const seat = l.seats.find(s => s.reservedFor === role);
     const idle = d.unfinished === 0;
-    const lounge = idle && loungeIndex < l.lounge.length ? l.lounge[loungeIndex++] : null;
+    const lounge = idle && loungeIndex < l.restSeats.length ? l.restSeats[loungeIndex++] : null;
     actors.push({
       id: role === "coordinator" ? "assistant" : `lead-${role}`,
       label: role === "coordinator" ? "Executive assistant" : `${ROLE_NAMES[role]} lead`,
       kind: role === "coordinator" ? "assistant" : "lead", role,
-      position: lounge ?? l.leads[role], rotation: lounge ? 0 : seat?.rotation ?? Math.PI,
+      position: lounge?.position ?? l.leads[role], rotation: lounge ? lounge.rotation : seat?.rotation ?? Math.PI,
       status: d.activity, health: d.healthIssues > 0,
       selection: { kind: "department", agent: role }, identitySeed: `lead-${role}`,
       rest: idle ? (lounge ? "lounge" : "desk") : undefined,
