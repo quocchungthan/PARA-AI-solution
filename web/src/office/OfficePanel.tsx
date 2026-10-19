@@ -158,6 +158,7 @@ export function OfficePanel() {
                       onCameraChange={(pose) => {
                         dispatchOffice({
                           type: "camera",
+                          styleId: runtime.styleId,
                           pose,
                         });
                         if (region.current)

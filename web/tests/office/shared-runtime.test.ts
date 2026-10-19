@@ -58,7 +58,7 @@ test("quiet reconnect, interrupted entry, resumption, and disappearance retain t
   r = reduce(r, { type: "snapshot", model: model(snap), nowMs: 40 });
   assert.equal(r.workers.find(w => w.sessionId === "worker-0")!.phase, "seated");
   const camera = { position: [1, 2, 3] as const, target: [0, 0, 0] as const, zoom: 10 };
-  r = reduce(r, { type: "camera", pose: camera });
+  r = reduce(r, { type: "camera", styleId: "botanical", pose: camera });
   r = reduce(r, { type: "connectivity", online: false, nowMs: 50 });
   r = reduce(r, { type: "snapshot", model: model(populated(3)), nowMs: 60 });
   r = reduce(r, { type: "connectivity", online: true, nowMs: 70 });
