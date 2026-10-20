@@ -28,6 +28,7 @@ var dataDir = Path.GetFullPath(Env("PARA_DATA_DIR") ?? "data", root);
 var poll = int.TryParse(Env("PARA_POLL_SECONDS"), out var p) ? p : 15;
 var once = args.Contains("--once");
 
+using var lease = new BridgeLease(dataDir);
 Log.Init(Path.Combine(dataDir, "bridge", "bridge.log"));
 AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Error("fatal", "unhandled exception", e.ExceptionObject as Exception);
 
@@ -63,7 +64,8 @@ if (!Providers.Status.Any(s => s.Available))
     Log.Warn("main", "no agent provider is available: sessions cannot be started or resumed (dashboard and human queue still work)");
 
 await using var _c = client;
-var scanner = new Scanner(dataDir, root, Env("PARA_MODEL"), int.TryParse(Env("PARA_DAILY_HOUR"), out var dh) ? dh : 9, client);
+var scanner = new Scanner(dataDir, root, Env("PARA_MODEL"), int.TryParse(Env("PARA_DAILY_HOUR"), out var dh) ? dh : 9,
+    client is null ? null : new CopilotAgentRuntime(client));
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; Log.Info("main", "Ctrl+C received, stopping after current pass"); cts.Cancel(); };
@@ -77,5 +79,6 @@ do
     Log.Debug("main", $"sleeping {poll}s");
     try { await Task.Delay(TimeSpan.FromSeconds(poll), cts.Token); } catch (OperationCanceledException) { }
 } while (!cts.IsCancellationRequested);
+await scanner.WaitForIdleAsync();
 Log.Info("main", "bridge stopped");
 return 0;

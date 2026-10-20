@@ -9,12 +9,21 @@ public class SessionFile
 {
     List<Need> _needs = new();
     List<ProgressEntry> _progress = new();
+    List<OutboxCommand> _outbox = new();
 
     public string SessionId { get; set; } = "";
     public string? Agent { get; set; }
     public string? Title { get; set; }
     public string? TaskType { get; set; }          // feature | bug | research | review | ops | other
     public string? Task { get; set; }
+    public string? Phase { get; set; } // analysis | approval | implementation | review | delivered | declined
+    public TaskEstimate? Estimate { get; set; }
+    public string? Work { get; set; }
+    public List<OutboxCommand> Outbox
+    {
+        get => _outbox;
+        set => _outbox = value?.Where(c => c is not null).ToList() ?? new();
+    }
     // working | waiting_input | pending | blocked | needs_human | done
     // needs_human = only Chung can resolve it; the bridge never delegates or retries it, it only surfaces it.
     public string State { get; set; } = "working";
@@ -65,6 +74,12 @@ public static class SessionHealth
     public static List<string> Issues(SessionFile session)
     {
         var issues = new List<string>();
+        var outboxWait = session.Outbox.Any(c => !string.IsNullOrWhiteSpace(c.Id) &&
+            (c.Kind == "request" && c.Points is >= 1 and <= 2 && c.Mode is "self" or "new" &&
+                !string.IsNullOrWhiteSpace(c.Prompt) && !string.IsNullOrWhiteSpace(c.ApprovalRef) &&
+                c.Acceptance?.Any(a => !string.IsNullOrWhiteSpace(a)) == true ||
+             c.Kind == "report" && c.ReportKind is "waiting" or "blocked" &&
+                !string.IsNullOrWhiteSpace(c.AssignmentId) && !string.IsNullOrWhiteSpace(c.Summary)));
         if (session.Discovered)
         {
             // Only a live session can still follow the protocol; an idle one is just history.
@@ -80,9 +95,15 @@ public static class SessionHealth
 
         if (session.State == "done" && string.IsNullOrWhiteSpace(session.Result))
             issues.Add("done state has no result");
-        if (session.State == "waiting_input" && string.IsNullOrWhiteSpace(session.Question) && session.Handoff is null)
+        if (session.Phase == "approval" && (session.State != "needs_human" ||
+            !session.Needs.Any(n => n.Resolver == "human") || string.IsNullOrWhiteSpace(session.Question)))
+            issues.Add("approval phase requires needs_human, a human need and an approval question");
+        if (session.Phase == "delivered" && session.State != "done")
+            issues.Add("delivered phase requires done state");
+        if (session.State == "waiting_input" && string.IsNullOrWhiteSpace(session.Question) && session.Handoff is null &&
+            !outboxWait)
             issues.Add("waiting_input state has no question");
-        if (session.State == "blocked" && session.Needs.Count == 0)
+        if (session.State == "blocked" && session.Needs.Count == 0 && !outboxWait)
             issues.Add("blocked state has no needs");
         if (session.State == "needs_human" &&
             (string.IsNullOrWhiteSpace(session.Question) || !session.Needs.Any(n => n.Resolver == "human")))
@@ -129,10 +150,17 @@ public class InboxMessage
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string? From { get; set; }              // "user", "bridge", or originating sessionId
     public string Prompt { get; set; } = "";
-    public string Status { get; set; } = "pending"; // pending | delivered | failed
+    public string Status { get; set; } = "pending"; // pending | delivering | delivered | failed
     public string? Response { get; set; }
     public string? CreatedAt { get; set; }
     public string? DeliveredAt { get; set; }
+    public int Attempts { get; set; }
+    public string? LastAttemptAt { get; set; }
+    public string? NextAttemptAt { get; set; }
+    public string? LastError { get; set; }
+    public int TimeoutSeconds { get; set; } = 1800;
+    public bool CreateSession { get; set; }
+    public string? Agent { get; set; }
 }
 
 public sealed record SessionReplyRequest(string? Message);
@@ -141,20 +169,64 @@ public sealed record SessionReplyRequest(string? Message);
 public class BridgeState
 {
     public List<Delegation> Delegations { get; set; } = new();
+    public List<OutboxReceipt> OutboxReceipts { get; set; } = new();
     public HashSet<string> SeenHandoffs { get; set; } = new();   // "<sessionId>:<handoffId>"
     public string? LastDailyRun { get; set; }                    // local date yyyy-MM-dd of the last scrum-master run
+    public string? DailyRunDate { get; set; }
+    public List<string> DailyCatchUpSessionIds { get; set; } = new();
     public string? ScrumMasterId { get; set; }                   // reused so the scrum master keeps its context across days
 }
 
 public class Delegation
 {
+    public int? Protocol { get; set; }
+    public string? Mode { get; set; }
+    public string? RootKey { get; set; }
+    public string? ParentKey { get; set; }
+    public string? Title { get; set; }
+    public int Points { get; set; }
+    public List<string> Acceptance { get; set; } = new();
+    public List<string> DependsOn { get; set; } = new();
+    public List<string> Writes { get; set; } = new();
+    public string? AccessMode { get; set; }
+    public List<string>? Reads { get; set; }
+    public string? ApprovalRef { get; set; }
+    public string? WorkState { get; set; }
+    public string? PayloadHash { get; set; }
+    public List<AssignmentReport> Reports { get; set; } = new();
     public string Key { get; set; } = "";          // "<originId>:<handoffId>"
     public string OriginId { get; set; } = "";
     public string TargetId { get; set; } = "";
     public bool WantResult { get; set; }
-    // assigned | result_fed | failed | limit_reached
+    public string? Agent { get; set; }
+    public bool? CreateSession { get; set; }
+    // pending | starting | assigned | result_fed | failed | limit_reached
     public string Status { get; set; } = "assigned";
     public string? CreatedAt { get; set; }
+    public string? Prompt { get; set; }
+    public int Attempts { get; set; }
+    public string? LastAttemptAt { get; set; }
+    public string? NextAttemptAt { get; set; }
+    public string? LastError { get; set; }
+    public int RecoveryAttempts { get; set; }
+}
+
+public static class RetryPolicy
+{
+    public const int MaxAttempts = 5;
+    static readonly TimeSpan BaseDelay = TimeSpan.FromSeconds(15);
+    static readonly TimeSpan MaxDelay = TimeSpan.FromMinutes(15);
+
+    public static DateTimeOffset NextAttempt(int attempts, DateTimeOffset now)
+    {
+        var exponent = Math.Clamp(attempts - 1, 0, 10);
+        var seconds = Math.Min(BaseDelay.TotalSeconds * Math.Pow(2, exponent), MaxDelay.TotalSeconds);
+        return now.AddSeconds(seconds);
+    }
+
+    public static bool IsDue(string? nextAttemptAt, DateTimeOffset? now = null) =>
+        !DateTimeOffset.TryParse(nextAttemptAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var next)
+        || next <= (now ?? DateTimeOffset.UtcNow);
 }
 
 public static class Json
@@ -170,7 +242,11 @@ public static class Json
     public static T? Read<T>(string path)
     {
         // Tolerate a writer mid-write; the next tick will retry.
-        try { return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options); }
+        try
+        {
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonSerializer.Deserialize<T>(file, Options);
+        }
         catch (Exception e) when (e is IOException or JsonException)
         {
             Bridge.Log.Warn("json", $"cannot read {path}: {e.Message} (will retry next pass)");
@@ -178,10 +254,21 @@ public static class Json
         }
     }
 
-    public static void WriteAtomic<T>(string path, T value)
+    public static void WriteAtomic<T>(string path, T value, Action<string, string>? replace = null)
     {
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(value, Options));
-        File.Move(tmp, path, overwrite: true);
+        var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using (var file = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                JsonSerializer.Serialize(file, value, Options);
+                file.Flush(flushToDisk: true);
+            }
+            AssignmentPersistence.Replace(tmp, path, replace);
+        }
+        finally
+        {
+            if (File.Exists(tmp)) File.Delete(tmp);
+        }
     }
 }

@@ -50,7 +50,7 @@ public static class SessionStore
                 var cwd = meta.GetValueOrDefault("cwd") ?? meta.GetValueOrDefault("git_root");
                 if (cwd is null || !IsInside(Normalize(cwd), root)) continue;
 
-                var live = IsLive(dir);
+                var live = IsLiveDirectory(dir);
                 // A session that never produced an event log has nothing to show.
                 if (!live && !File.Exists(Path.Combine(dir, "events.jsonl"))) continue;
                 var activity = Inspector.LastActivity(id) ?? Stamp(meta.GetValueOrDefault("updated_at")) ?? Stamp(meta.GetValueOrDefault("created_at"));
@@ -77,19 +77,37 @@ public static class SessionStore
     }
 
     // Copilot holds inuse.<pid>.lock for as long as a process owns the session.
-    static bool IsLive(string dir)
+    public static bool IsLive(string sessionId) => LiveOwnerIds(sessionId).Count > 0;
+
+    public static IReadOnlyList<int> LiveOwnerIds(string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out _)) return [];
+        var directory = Path.Combine(StateRoot, sessionId);
+        try { return Directory.Exists(directory) ? ReadLiveOwners(directory).ToList() : []; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable owner lock is uncertainty, not permission to open another host.
+            return [-1];
+        }
+    }
+
+    static bool IsLiveDirectory(string dir) => ReadLiveOwners(dir).Any();
+
+    static IEnumerable<int> ReadLiveOwners(string dir)
     {
         foreach (var lck in Directory.EnumerateFiles(dir, "inuse.*.lock"))
         {
             var parts = Path.GetFileName(lck).Split('.');
             if (parts.Length == 3 && int.TryParse(parts[1], out var pid))
             {
-                try { using var p = Process.GetProcessById(pid); if (!p.HasExited) return true; }
+                var live = false;
+                try { using var p = Process.GetProcessById(pid); live = !p.HasExited; }
                 catch (ArgumentException) { }
                 catch (InvalidOperationException) { }
+                catch (System.ComponentModel.Win32Exception) { live = true; }
+                if (live) yield return pid;
             }
         }
-        return false;
     }
 
     static Dictionary<string, string> ReadYaml(string path)

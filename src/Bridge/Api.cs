@@ -90,8 +90,12 @@ public static class Api
         var reply = new InboxMessage { From = "user", Prompt = message, CreatedAt = DateTimeOffset.UtcNow.ToString("o") };
         try
         {
-            await InboxStore.EnqueueAsync(inboxPath, reply);
+            await InboxStore.EnqueueHumanReplyAsync(inboxPath, reply);
             return Results.Accepted(value: new { messageId = reply.Id, status = reply.Status });
+        }
+        catch (InvalidOperationException e)
+        {
+            return Results.Conflict(new { error = e.Message });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -100,17 +104,21 @@ public static class Api
         }
     }
 
-    static object Snapshot(string dataDir)
+    static object Snapshot(string dataDir, string? repoRoot = null)
     {
-        var sessions = SessionStore.LoadAll(dataDir, _repoRoot);
+        var sessions = SessionStore.LoadAll(dataDir, repoRoot ?? _repoRoot);
 
         var bridgeDir = Path.Combine(dataDir, "bridge");
         var statePath = Path.Combine(bridgeDir, "state.json");
         var queuePath = Path.Combine(bridgeDir, "human-queue.json");
+        var hasState = File.Exists(statePath);
+        var state = hasState ? Json.Read<BridgeState>(statePath) : null;
+        var ledger = state ?? new BridgeState();
 
         return new
         {
             now = DateTimeOffset.UtcNow,
+            assignmentProtocol = 2,
             roles = _agentsDir.Length > 0 && Directory.Exists(_agentsDir)
                 ? Directory.GetFiles(_agentsDir, "*.agent.md").Select(f => Path.GetFileName(f)[..^".agent.md".Length]).Order().ToList()
                 : new List<string>(),
@@ -121,6 +129,9 @@ public static class Api
                 s.Title,
                 s.TaskType,
                 s.Task,
+                s.Phase,
+                s.Estimate,
+                s.Work,
                 s.State,
                 s.Needs,
                 s.Question,
@@ -135,9 +146,30 @@ public static class Api
                 lastActivityAt = Inspector.LastActivity(s.SessionId),
                 silent = Inspector.IsSilent(s.State, Inspector.LastActivity(s.SessionId), DateTimeOffset.UtcNow),
             }),
-            delegations = (File.Exists(statePath) ? Json.Read<BridgeState>(statePath)?.Delegations : null) ?? new(),
-            humanQueue = File.Exists(queuePath) ? Json.Read<JsonElement>(queuePath) : default,
+            delegations = (state?.Delegations ?? new())
+                .Select(d => new { d.Key, d.OriginId, d.TargetId, d.WantResult, d.Status, d.CreatedAt, d.Attempts, d.NextAttemptAt, d.LastError })
+                .ToList(),
+            assignments = (state?.Delegations ?? new())
+                .Select(d => new { d.Key, d.Protocol, d.OriginId, d.TargetId, d.Title, d.Mode,
+                    d.RootKey, d.ParentKey, d.Points, d.WorkState, d.Status, d.Acceptance, d.DependsOn,
+                    d.Writes, d.AccessMode, d.Reads, d.Reports, d.LastError,
+                    scheduling = AssignmentPolicy.DescribeScheduling(d, ledger,
+                        id => sessions.FirstOrDefault(s => string.Equals(s.SessionId, id, StringComparison.OrdinalIgnoreCase))) })
+                .ToList(),
+            outboxReceipts = (state?.OutboxReceipts ?? new())
+                .Select(r => new { r.SessionId, r.CommandId, r.Status, r.AssignmentId, r.Error })
+                .ToList(),
+            assignmentError = hasState && state is null ? "The assignment ledger could not be read. Existing work has not been reset." : null,
+            humanQueue = File.Exists(queuePath) ? Json.Read<JsonElement?>(queuePath) : null,
             providers = Providers.Status,
+            deliveries = Directory.Exists(Path.Combine(dataDir, "inbox"))
+                ? Directory.GetFiles(Path.Combine(dataDir, "inbox"), "*.json").SelectMany(path =>
+                    (Json.Read<InboxFile>(path)?.Messages ?? new())
+                        .Where(m => m.From == "user" || m.Status == "failed")
+                        .Select(m => new { sessionId = Path.GetFileNameWithoutExtension(path), messageId = m.Id,
+                            m.From, m.Status, m.Attempts, m.NextAttemptAt, m.LastError, m.CreatedAt, m.DeliveredAt }))
+                    .ToList()
+                : [],
             log = TailLog(Path.Combine(bridgeDir, "bridge.log"), 150),
         };
     }

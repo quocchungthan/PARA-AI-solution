@@ -1,8 +1,9 @@
 # PARA Bridge
 
-Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI agent sessions. Three tabs:
+Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI agent sessions. Four tabs:
 - **Overview**: the interactive orchestration network (left) and the Bridge logs (right).
-- **Sessions**: the work queue by state, throughput and health.
+- **Tasks**: canonical assignments grouped into queued, running/granted, waiting/attention and finished, with scheduling reasons, supervisor/worker links and explicit reports.
+- **Sessions**: recorded session phases (not execution status), the session queue by state, throughput and health.
 - **Agents**: each agent's role, workload and latest signal.
 
 **Open:** https://quocchungthan.github.io/para-bridge/. The page is static and always calls the local Bridge on `http://localhost:5310`.
@@ -16,12 +17,59 @@ Watch / observe tool: a mission-control dashboard for a cluster of Copilot CLI a
    ```
 3. Open the page. If it says offline, allow **local network access** for the site when the browser asks.
 
+Use the normal runner above for the live team. `dotnet watch` is for isolated
+development: automatic restarts can interrupt SDK turns and are not a scheduling
+or recovery mechanism. After an update, stop the live Bridge cleanly before
+starting its replacement; never run two instances against the same data directory.
+
 Tips:
 - Drag, pan and zoom the network. Click an agent node to dim the others, or a session node to open it.
 - Click a card to open its session (link: `#view=sessions&session=<id>`, Esc closes it). Press `/` to search.
 - The bell next to the theme toggle lights up when a new task enters the work queue. Click the notification to jump to **Sessions** with that task outlined in blue.
 - Logs: **ALL** hides DEBUG lines (use the DEBUG filter to see them). INFO lines that report success (`done`, `delivered`, `result_fed`, `assigned ->`, `started`) are shown as green **OK**.
 For sessions that need a human, open the card, enter your answer in **Reply to this session**, and send it. The Bridge queues the reply and delivers it on its next scan.
+
+## Task intake and local delivery
+
+Start a **coordinator** CLI session and supply GitHub issue links/repository or an Azure Boards project/query. If you have not chosen a source, the coordinator asks at startup; it uses your signed-in tools rather than asking for tokens. There is no automatic background board importer.
+
+Each task gets a separate coordinator session and follows:
+
+`Analyze -> Your approval -> Implement -> Review -> Delivered locally`
+
+The coordinator records the source, proposed scope, acceptance criteria, risks and dependencies, then stops in `needs_human` with an implementation-approval question. Open the task in **Sessions**, review its progress/scope, choose **Approve implementation** or **Keep for later**, and send the decision. Selecting a button only prepares a reply; sending queues it. The drawer shows pending/delivering/delivered/failed transport status, and the agent changes the task phase only after processing the answer. Duplicate queued human replies are rejected.
+
+Approved bounded assignments can be delegated without asking again for the same scope. Review precedes local delivery; the result must identify local changes/artifacts, verification and limitations. PARA does **not** automatically open a PR, push, merge or close GitHub/Azure work items. These are cooperative agent instructions, not a hard permission sandbox: the Copilot runtime currently approves SDK tool-permission requests. Existing sessions without an explicit phase remain in the regular queue, not falsely marked as delivered product tasks.
+
+## Estimate, break down, report and wait
+
+Every session in this workspace, including plain/unassigned CLI sessions, estimates
+its work. Approved independent CLI work executes directly, without a Bridge grant
+or a running Bridge. Coordination is opt-in: autonomous delegated work uses
+`mode: new`; do not submit self requests. Larger managed work becomes bounded requests in its append-only
+`outbox`, with acceptance criteria, dependencies, write scopes and approval context.
+The Bridge owns the single canonical assignment list in `state.json` and starts
+workers only when scheduling gates permit. Default concurrency is two; uncertain
+work retains ownership rather than being silently reassigned. Queued legacy self
+requests no longer acquire reservations: their creators cancel them before direct
+execution or new managed submissions. Already granted work still needs an owner report.
+
+Read-only managed work explicitly uses `accessMode: "read_only"`, relative `reads`
+and `writes: []`. Readers may run together; overlapping readers/writers cannot.
+Omitting accessMode retains legacy `writes: []` repository-exclusive behavior.
+Never change emitted commands to migrate their scopes.
+
+Workers explicitly report evidence and verification to the supervisor that
+created each task. A progress/waiting report or a delivered message is not
+completion. Supervisors yield while waiting; the Bridge wakes them for durable
+reports instead of keeping an LLM in a polling loop. An attended CLI is not
+resumed in a second SDK process, so its user or later safe resume must consume
+queued messages.
+
+See **[Durable assignment loop](docs/assignment-loop.md)** for the persisted
+architecture, chess-agent lessons, command examples, operating limits and team
+breakdown. Existing scalar `handoff` remains compatible; new team work uses
+multi-command outboxes. Nothing here bypasses human approval or publishes work.
 
 ## Register in AFFiNE
 
@@ -93,18 +141,23 @@ Copilot CLI sessions coordinate through git-ignored JSON files in `data/`:
 - `data/bridge/state.json`: the Bridge's own bookkeeping.
 
 **Flow:**
-1. A session sets `handoff`.
-2. The Bridge starts or resumes the target session.
-3. When the target reaches `done`, `waiting_input` or `blocked`, the Bridge sends its result back to the origin session.
+1. A session sets `handoff`; the Bridge persists its target identity, original prompt and agent before execution.
+2. The Bridge queues the assignment in a durable inbox, then resumes the target (or creates the saved new target if it does not exist).
+3. When the target reaches `done`, `waiting_input`, `blocked` or `needs_human`, the Bridge queues its result back to the origin.
+4. The same dispatcher handles assignments, results, recovery, daily prompts and human replies. Delivery is ordered per session; a busy session does not block unrelated sessions.
 
-To feed a session input, add `{ "prompt": "...", "status": "pending" }` to `data/inbox/<id>.json`.
+Use the dashboard reply form for human input; do not edit Bridge-owned inbox/state files while it is running.
 
 **Limits:**
-- Needs tagged `human` go to `data/bridge/human-queue.json` and are never retried.
-- Agents stop after 3 attempts.
+- Needs tagged `human` go to `data/bridge/human-queue.json`. Automated messages do not resume these sessions; a queued human decision can bypass paused automated messages.
+- Agents escalate unresolved needs after 3 resolution attempts; the Bridge's transport retries are a separate 5-attempt policy.
 - Handoffs are refused past `PARA_MAX_DEPTH` (default 3) or `PARA_MAX_HANDOFFS` (default 5).
+- The Bridge retries transient delivery failures with persisted exponential backoff (up to 5 attempts; delays of 15, 30, 60 and 120 seconds between attempts). Saved assignments survive changes to the origin's current handoff. Interrupted delegated work gets at most 3 recovery cycles, with a 10-minute cooldown; restart does not reset the budget. Failed deliveries/delegations surface their errors for human attention.
+- A new-target assignment whose Copilot session disappeared can be recreated using its **same saved ID** and prompt. Existing-target messages never create a different session. Legacy delegations without reconstructable original work fail visibly instead of inventing a replacement assignment.
+- A writer lease rejects a second updated Bridge using the same data directory. State and inbox writes use flushed temporary files and atomic replacement; unreadable Bridge state is retained rather than reset. Older Bridge binaries do not take this lease: stop the old instance before upgrading.
+- Delivery is **at least once**, not exactly once: if the Bridge stops after Copilot receives a prompt but before delivery is recorded, it may send that message again. Retried prompts carry the stable message ID and ask the agent not to repeat completed side effects; delegated work should still be safe to resume.
 
-**Daily:** at `PARA_DAILY_HOUR` (default 9), the Bridge asks recently active, protocol-valid working sessions for a catch-up in parallel (45-second timeout per reply), then runs the `scrum-master` agent (90-second timeout). Working sessions whose `updatedAt` is older than `PARA_STALE_MINUTES` (default 10), and sessions violating required state/question/needs/result fields, are flagged in the dashboard and logs and reported to the scrum master rather than resumed automatically. The Bridge never edits an agent-owned session file. Users start work through the `coordinator` agent.
+**Daily:** at `PARA_DAILY_HOUR` (default 9), the Bridge queues catch-ups for recently active, protocol-valid working sessions (45-second timeout per reply), then queues `scrum-master` after those messages finish or exhaust retries (90-second timeout). Daily work uses the normal dispatcher and does not exclusively block normal work. The day is marked complete only after scrum delivery succeeds; failures retain bounded retry state. Stale/invalid standalone sessions are flagged, not blindly resumed. Assigned delegated work can receive bounded recovery when it has no recent event activity. The Bridge never edits an agent-owned session file. Users start work through the `coordinator` agent.
 
 **Config** (environment variables or `.env`): `PARA_DATA_DIR`, `PARA_POLL_SECONDS`, `PARA_MODEL`, `PARA_STALE_MINUTES`, plus the variables above.
 
