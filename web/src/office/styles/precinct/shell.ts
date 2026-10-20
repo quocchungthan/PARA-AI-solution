@@ -13,7 +13,8 @@ export function buildPrecinctShell(layout:OfficeLayout,C:PrecinctPalette,cutaway
     }
   }
   for(const wall of layout.walls) {
-    const height=cutaway?wall.cutawayHeight:wall.height,x=(wall.from[0]+wall.to[0])/2,z=(wall.from[2]+wall.to[2])/2;
+    const glazed=(wall.from[2]===0&&wall.to[2]===0&&Math.min(wall.from[0],wall.to[0])>=9.8)||(wall.from[0]===24&&wall.to[0]===24&&Math.min(wall.from[2],wall.to[2])>=3.2)||(wall.from[2]===18&&wall.to[2]===18);
+    const height=glazed ? .68 : (cutaway?wall.cutawayHeight:wall.height),x=(wall.from[0]+wall.to[0])/2,z=(wall.from[2]+wall.to[2])/2;
     const w=Math.abs(wall.to[0]-wall.from[0])+.22,d=Math.abs(wall.to[2]-wall.from[2])+.22;
     box(g,x,height/2,z,w,height,d,C.cream);box(g,x,.14,z,w+.025,.22,d+.025,'#5c665e');
     box(g,x,height+.06,z,w+.045,.13,d+.045,'#e8ddb9');

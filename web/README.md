@@ -207,6 +207,14 @@ toggleParaTheme();
 
 ---
 
+## Selectable 3D offices
+
+The Office view offers **Botanical Studio** and **Nine-Nine Precinct** through the **Office style** selector. Botanical is the default. Your style and each office's camera are remembered locally; light/dark theme is independent. Switching preserves live sessions, selection, notices and source events, while moving workers to valid seats in the destination layout.
+
+Use Home and room buttons to focus the scene, drag to orbit, right-drag or Shift-drag to pan, and scroll to zoom. Precinct also has Reverse and Plan views, a separate kitchenette, and a projecting break room. **Cutaway walls** opens the near partitions and captain's bookcase; turn it off to inspect their full detail. On narrow screens choose **Show 3D office** first. Roster and details remain usable while graphics load or recover.
+
+Precinct representatives use the approved cast mapping while labels retain real PARA roles and session names. Optional coffee/rest visits yield to work, selection, connectivity and reduced motion. The global temporary-worker limit remains ten. See [precinct validation](../docs/office-precinct-validation.md) for measured evidence and the approximation used for the rear rooms.
+
 ## 4. Self-Hosted Seafile Custom CSS (`seafile-custom.css`)
 
 Every pipeline run builds `seafile-custom.css` and `seafile-custom.min.css` and uploads them as the **`seafile-custom-css`** artifact on the GitHub Actions run (and prints a copy-paste block in the workflow summary).

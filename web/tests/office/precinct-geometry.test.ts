@@ -33,3 +33,10 @@ test('captain cutaway opens the near bookcase so the manager remains visible',()
   assert.ok(full.boxes.some(v=>nearShelf(v)&&v.position[1]+v.size[1]/2>3));
   assert.ok(cut.boxes.filter(nearShelf).every(v=>v.position[1]+v.size[1]/2<=1.3+1e-6));
 });
+test('full-height glass fronts keep their windows open above the solid sill',()=>{
+  const full=buildPrecinctShell(l,p,false);
+  const front=full.boxes.filter(v=>v.color===p.cream&&v.position[2]===0&&v.position[0]>9&&v.position[0]<16&&v.size[0]>2&&v.size[2]>.1);
+  assert.ok(front.length>0);
+  assert.ok(front.every(v=>v.position[1]+v.size[1]/2<1),'An opaque wall must not fill the glass frontage');
+  assert.ok(full.panels.some(v=>v.surface==='glass'&&v.position[0]===12.8&&v.height>2));
+});

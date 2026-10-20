@@ -10,6 +10,7 @@ test('precinct cast preserves real labels and reports to two exact source sessio
   await expect(canvas).toHaveAttribute('data-cast-ids',/Holt/,{timeout:20000});
   const cast=JSON.parse((await canvas.getAttribute('data-cast-ids'))!);
   for(const name of ['Holt','Amy','Jake','Rosa','Boyle','Terry','Gina','Kevin'])expect(cast).toContain(name);
+  await page.locator('.splash').waitFor({state:'detached'});
   await page.locator('.officeSceneRegion').screenshot({path:'test-results/office-evidence/precinct-cast-overview.png'});
   await expect(page.locator('.officeActorLabel[data-kind="worker"]')).toHaveCount(3);
   await expect(page.getByLabel('Inspect Task w',{exact:true})).toHaveCount(1);

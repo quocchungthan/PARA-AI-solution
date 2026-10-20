@@ -1,10 +1,15 @@
 import type { BotanicalPalette } from "./palette";
+import {useRef} from 'react';
+import type {DirectionalLight} from 'three';
+import {useOwnedShadow} from './resources';
 export function Lighting({ p }: { p: BotanicalPalette }) {
+  const sun=useRef<DirectionalLight>(null);useOwnedShadow(sun,p);
   return (
     <>
       <ambientLight intensity={p.ambient} />
       <hemisphereLight args={["#e0f1ed", "#63745b", 1]} />
       <directionalLight
+        ref={sun}
         position={[-12, 22, 8]}
         intensity={p.key}
         color={p.keyColor}

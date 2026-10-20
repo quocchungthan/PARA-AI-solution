@@ -42,7 +42,7 @@ export function OfficePanel() {
   );
   if (!runtime) return <p>Waiting for the Bridge snapshot…</p>;
   const style=getOfficeStyle(runtime.styleId);
-  const switchStyle=(styleId:OfficeStyleId)=>{setCameraReady(null);dispatchOffice({type:"style",styleId,nowMs:Date.now()});};
+  const switchStyle=(styleId:OfficeStyleId)=>{if(styleId===runtime.styleId)return;setCameraReady(null);dispatchOffice({type:"style",styleId,nowMs:Date.now()});};
   const select = (selection: SharedOfficeSelection) =>
     dispatchOffice({ type: "select", selection });
   const details = (

@@ -21,6 +21,16 @@ import {
   Vector3,
 } from "three";
 import type { Vec3 } from "../types";
+import type {DirectionalLight} from 'three';
+// R3F normally disposes objects at idle priority. Shadows own render targets,
+// so release those synchronously when their scene is replaced, even in demand mode.
+export function useOwnedShadow(light:RefObject<DirectionalLight|null>,revision:unknown) {
+  useLayoutEffect(()=>{if(light.current)light.current.shadow.needsUpdate=true;},[light,revision]);
+  useLayoutEffect(()=>{
+    const shadow=light.current?.shadow;
+    return()=>{if(shadow){shadow.dispose();shadow.map=null;shadow.mapPass=null;}};
+  },[light]);
+}
 export type Voxel = {
   position: Vec3;
   size: Vec3;

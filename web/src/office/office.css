@@ -505,6 +505,27 @@
   .officeGraph {
     height: 550px;
   }
+  .officeSceneRegion.officeCompactScene {
+    display: flex;
+    flex-direction: column;
+    height: 440px;
+    min-height: 440px;
+  }
+  .officeCompactScene .officeCameraControls {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    flex-shrink: 0;
+    margin: 9px 10px 5px;
+  }
+  .officeCompactScene .officeCanvas {
+    position: relative;
+    inset: auto;
+    min-height: 260px;
+    flex: 1;
+  }
+  .officeCompactScene .officeRoomLabel { display: none; }
   .officeView button {
     padding: 7px 10px;
   }
