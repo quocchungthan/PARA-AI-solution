@@ -58,7 +58,8 @@ function structuralError(session) {
         if (!text(item.assignmentId) || !reportKinds.includes(item.reportKind) ||
             !text(item.summary) || !texts(item.evidence) ||
             (owns(item, "verification") && !text(item.verification)) ||
-            (owns(item, "question") && !text(item.question))) {
+            (owns(item, "question") && item.question !== null && !text(item.question)) ||
+            (item.reportKind === "needs_human" && !text(item.question))) {
           return "malformed outbox report";
         }
       } else if (item.kind === "cancel") {

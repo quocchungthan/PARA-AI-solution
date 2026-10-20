@@ -277,12 +277,12 @@ test("reports and cancellation validate only structure, not ownership or complet
     reportKind: "waiting", summary: "Awaiting dependency", evidence: [],
   };
   for (const reportKind of ["progress", "waiting", "blocked", "needs_human", "done", "failed"]) {
-    f.write(session({ outbox: [{ ...report, reportKind }] }));
+    f.write(session({ outbox: [{ ...report, reportKind, question: "Which prerequisite is missing?" }] }));
     assert.equal(f.run("stop"), null);
   }
   for (const invalid of [
     { reportKind: "cancelled" }, { assignmentId: "" }, { evidence: "proof" },
-    { verification: 1 }, { question: null },
+    { verification: 1 }, { question: 1 }, { question: "" }, { question: " " },
   ]) {
     f.write(session({ outbox: [{ ...report, ...invalid }] }));
     assert.match(f.run("stop").reason, /malformed outbox report/);
@@ -291,6 +291,26 @@ test("reports and cancellation validate only structure, not ownership or complet
   assert.equal(f.run("stop"), null);
   f.write(session({ outbox: [{ id: "cancel-1", kind: "cancel", assignmentId }] }));
   assert.match(f.run("stop").reason, /malformed outbox cancel/);
+});
+
+test("optional report questions accept null without rewriting immutable reports", (t) => {
+  const f = fixture(t);
+  for (const reportKind of ["progress", "waiting", "blocked", "done", "failed"]) {
+    for (const optional of [{}, { question: null }, { question: "Review this observation?" }]) {
+      f.write(session({ outbox: [{
+        id: "report-1", kind: "report", assignmentId, reportKind,
+        summary: "Observed result", evidence: ["Observed evidence"], verification: "passed", ...optional,
+      }] }));
+      assert.equal(f.run("stop"), null);
+    }
+  }
+  for (const optional of [{}, { question: null }, { question: "" }, { question: " " }]) {
+    f.write(session({ outbox: [{
+      id: "report-1", kind: "report", assignmentId, reportKind: "needs_human",
+      summary: "Human decision required", evidence: [], ...optional,
+    }] }));
+    assert.match(f.run("stop").reason, /malformed outbox report/);
+  }
 });
 
 test("unsafe session IDs cannot address another file", (t) => {

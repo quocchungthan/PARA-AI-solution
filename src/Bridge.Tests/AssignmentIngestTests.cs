@@ -103,6 +103,31 @@ public class AssignmentIngestTests
         Assert.Equal("rejected", state.OutboxReceipts.Last().Status);
     }
 
+    [Theory]
+    [InlineData("done", null, true)]
+    [InlineData("done", "Review this observation?", true)]
+    [InlineData("done", "", false)]
+    [InlineData("done", " ", false)]
+    [InlineData("needs_human", null, false)]
+    [InlineData("needs_human", "", false)]
+    [InlineData("needs_human", " ", false)]
+    [InlineData("needs_human", "Which environment should be used?", true)]
+    public void ReportQuestionIsOptionalExceptForHumanNeeds(string reportKind, string? question, bool accepted)
+    {
+        var row = new Delegation { Key = "key", Protocol = 2, TargetId = "origin", WorkState = "running" };
+        var state = new BridgeState { Delegations = [row] };
+        var session = Session(new OutboxCommand { Id = "r", Kind = "report", AssignmentId = "key",
+            ReportKind = reportKind, Summary = "Observed result", Evidence = ["tests"],
+            Verification = "passed", Question = question });
+
+        AssignmentIngestor.Apply(state, session, now);
+
+        Assert.Equal(accepted ? "accepted" : "rejected", Assert.Single(state.OutboxReceipts).Status);
+        Assert.Equal(accepted ? reportKind : "running", row.WorkState);
+        if (accepted) Assert.Equal(question, Assert.Single(row.Reports).Question);
+        else Assert.Empty(row.Reports);
+    }
+
     [Fact]
     public void TerminalReportsRequireEvidenceAndVerificationAndCancelRetainsOwnership()
     {

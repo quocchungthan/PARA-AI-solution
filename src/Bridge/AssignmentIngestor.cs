@@ -126,6 +126,8 @@ public static class AssignmentIngestor
             return "Terminal reports require meaningful evidence and verification (or 'not run: reason').";
         if (c.ReportKind == "needs_human" && string.IsNullOrWhiteSpace(c.Question))
             return "Human report requires a question.";
+        if (c.Question is not null && string.IsNullOrWhiteSpace(c.Question))
+            return "Report question must be null or nonempty text.";
         if (state.Delegations.Any(other => other.Protocol == 2 && other.OriginId == row.OriginId &&
             other.Reports.Any(report => $"report:{other.Key}:{report.Id}" == $"report:{row.Key}:{c.Id}")))
             return "Report notification ID collision; use a different stable report command ID.";
