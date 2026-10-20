@@ -66,6 +66,15 @@ reports instead of keeping an LLM in a polling loop. An attended CLI is not
 resumed in a second SDK process, so its user or later safe resume must consume
 queued messages.
 
+### Agent guidance assets
+
+PARA distinguishes agent profiles (roles), instructions (durable scoped rules),
+skills (reusable capabilities), prompts (bounded task requests), workflows
+(ordered procedures), and protocols (ownership/state invariants). When adding or
+refactoring guidance, use the [agent-guidance-design skill](.github/skills/agent-guidance-design/SKILL.md)
+to keep portable principles separate from project-specific overlays and avoid
+duplicated sources of truth.
+
 See **[Durable assignment loop](docs/assignment-loop.md)** for the persisted
 architecture, chess-agent lessons, command examples, operating limits and team
 breakdown. Existing scalar `handoff` remains compatible; new team work uses
