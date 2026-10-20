@@ -6,8 +6,10 @@ public partial class Scanner
 {
     async Task ProcessAssignmentsAsync(BridgeState state, List<SessionFile> sessions)
     {
+        var agentRoles = AgentProfiles.GetNames(Path.Combine(_root, ".github", "agents"))
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var session in sessions.Where(s => !s.Discovered))
-            AssignmentIngestor.Apply(state, session, _now(), LoadSession, _turns.ContainsKey);
+            AssignmentIngestor.Apply(state, session, _now(), agentRoles, LoadSession, _turns.ContainsKey);
         Save(state); // Requests, immutable reports and rejections all precede inbox publication.
 
         foreach (var row in state.Delegations.Where(d => d.Protocol == 2))

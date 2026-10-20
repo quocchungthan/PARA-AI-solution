@@ -5,7 +5,7 @@ namespace Bridge;
 public static class AssignmentIngestor
 {
     public static void Apply(BridgeState state, SessionFile session, DateTimeOffset now,
-        Func<string, SessionFile?>? lookup = null, Func<string, bool>? active = null)
+        IReadOnlySet<string> agentRoles, Func<string, SessionFile?>? lookup = null, Func<string, bool>? active = null)
     {
         var fresh = new List<OutboxCommand>();
         string? batchError = null;
@@ -42,7 +42,7 @@ public static class AssignmentIngestor
         var requests = fresh.Where(c => c.Kind == "request").ToList();
         if (requests.Count > 0)
         {
-            var error = batchError ?? AssignmentPolicy.ValidateBatch(session, requests, state);
+            var error = batchError ?? AssignmentPolicy.ValidateBatch(session, requests, state, agentRoles);
             foreach (var c in requests)
             {
                 if (error is not null)

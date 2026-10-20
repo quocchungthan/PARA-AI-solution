@@ -61,7 +61,8 @@ public static class AssignmentPolicy
             right.Reads is not null && Overlaps(left.Writes, right.Reads);
     }
 
-    public static string? ValidateBatch(SessionFile origin, IReadOnlyList<OutboxCommand> commands, BridgeState state)
+    public static string? ValidateBatch(SessionFile origin, IReadOnlyList<OutboxCommand> commands,
+        BridgeState state, IReadOnlySet<string> agentRoles)
     {
         if (origin.State == "done" || Human(origin)) return "Origin is done or awaiting human input; requests are gated.";
         Delegation? parent = null;
@@ -95,6 +96,10 @@ public static class AssignmentPolicy
             if (string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Prompt) ||
                 string.IsNullOrWhiteSpace(c.ApprovalRef) || c.Acceptance is null || c.Acceptance.Count == 0 ||
                 c.Acceptance.Any(string.IsNullOrWhiteSpace)) return "Title, prompt, acceptance and approvalRef are required.";
+            if (c.Mode == "new" && (string.IsNullOrWhiteSpace(c.Agent) || !agentRoles.Contains(c.Agent)))
+                return agentRoles.Count == 0
+                    ? "New requests require an installed agent role, but no agent profiles are available."
+                    : $"New requests must specify an installed agent role. Available roles: {string.Join(", ", agentRoles.Order(StringComparer.Ordinal))}.";
             if (c.Writes is null || c.DependsOn is null) return "Writes and dependsOn must be lists.";
             if (c.AccessMode is not (null or "read_only" or "write")) return "AccessMode must be read_only or write.";
             if (c.AccessMode == "read_only" && c.Writes.Count > 0) return "Read-only requests cannot declare Writes.";

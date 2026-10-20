@@ -46,7 +46,8 @@ public class AssignmentContractTests
         Assert.Equal(expected, AssignmentPolicy.Hash(command));
         var state = new BridgeState { OutboxReceipts = [new()
             { SessionId = "origin", CommandId = command.Id, PayloadHash = expected, Status = "accepted" }] };
-        AssignmentIngestor.Apply(state, new() { SessionId = "origin", Outbox = [command] }, DateTimeOffset.UtcNow);
+        AssignmentIngestor.Apply(state, new() { SessionId = "origin", Outbox = [command] },
+            DateTimeOffset.UtcNow, AssignmentPolicyTests.AgentRoles);
         Assert.Null(state.OutboxReceipts.Single().CollisionHash);
         command.AccessMode = "read_only";
         command.Reads = ["docs"];

@@ -5,12 +5,17 @@ namespace Bridge.Tests;
 
 public class AssignmentPolicyTests
 {
+    public static readonly IReadOnlySet<string> AgentRoles =
+        new HashSet<string>(["coder", "reviewer", "researcher"], StringComparer.Ordinal);
+
     public static OutboxCommand Request(string id = "a", string mode = "new", params string[] writes) => new()
     {
         Id = id, Kind = "request", Title = id, Prompt = "Implement bounded task", Points = 2, Mode = mode,
-        Acceptance = ["Tests pass"], ApprovalRef = "Approved user scope", Writes = writes.ToList(),
+        Agent = "coder", Acceptance = ["Tests pass"], ApprovalRef = "Approved user scope", Writes = writes.ToList(),
     };
     public static SessionFile Origin() => new() { SessionId = "origin", UpdatedAt = DateTimeOffset.UtcNow.ToString("o") };
+    static string? Validate(SessionFile origin, IReadOnlyList<OutboxCommand> commands, BridgeState state) =>
+        AssignmentPolicy.ValidateBatch(origin, commands, state, AgentRoles);
 
     [Fact]
     public void BatchRejectsLargeEmptyUnknownAndCyclicRequests()
@@ -18,19 +23,19 @@ public class AssignmentPolicyTests
         var origin = Origin();
         var state = new BridgeState();
         var a = Request();
-        Assert.Null(AssignmentPolicy.ValidateBatch(origin, [a], state));
+        Assert.Null(Validate(origin, [a], state));
         a.Points = 3;
-        Assert.NotNull(AssignmentPolicy.ValidateBatch(origin, [a], state));
+        Assert.NotNull(Validate(origin, [a], state));
         a.Points = 2;
         a.Acceptance.Clear();
-        Assert.NotNull(AssignmentPolicy.ValidateBatch(origin, [a], state));
+        Assert.NotNull(Validate(origin, [a], state));
         a.Acceptance.Add("Pass");
         a.DependsOn = ["missing"];
-        Assert.Contains("Unknown", AssignmentPolicy.ValidateBatch(origin, [a], state));
+        Assert.Contains("Unknown", Validate(origin, [a], state));
         var b = Request("b");
         a.DependsOn = ["b"];
         b.DependsOn = ["a"];
-        Assert.Contains("cycle", AssignmentPolicy.ValidateBatch(origin, [a, b], state));
+        Assert.Contains("cycle", Validate(origin, [a, b], state));
     }
 
     [Theory]
@@ -69,15 +74,15 @@ public class AssignmentPolicyTests
         var parent = new Delegation { Key = "parent", RootKey = "parent", Protocol = 2,
             TargetId = "other", WorkState = "running", Writes = ["src"], ApprovalRef = "Approved user scope" };
         var state = new BridgeState { Delegations = [parent] };
-        Assert.NotNull(AssignmentPolicy.ValidateBatch(origin, [Request()], state));
+        Assert.NotNull(Validate(origin, [Request()], state));
         parent.TargetId = origin.SessionId;
-        Assert.NotNull(AssignmentPolicy.ValidateBatch(origin, [Request("a", "new", "web")], state));
-        Assert.Null(AssignmentPolicy.ValidateBatch(origin, [Request("a", "new", "src/file")], state));
+        Assert.NotNull(Validate(origin, [Request("a", "new", "web")], state));
+        Assert.Null(Validate(origin, [Request("a", "new", "src/file")], state));
         parent.ApprovalRef = "A different approval";
-        Assert.Contains("approvalRef", AssignmentPolicy.ValidateBatch(origin, [Request("a", "new", "src/file")], state));
+        Assert.Contains("approvalRef", Validate(origin, [Request("a", "new", "src/file")], state));
         parent.ApprovalRef = "Approved user scope";
         parent.ParentKey = "parent";
-        Assert.Contains("Cyclic", AssignmentPolicy.ValidateBatch(origin, [Request()], state));
+        Assert.Contains("Cyclic", Validate(origin, [Request()], state));
     }
 
     [Fact]
@@ -85,8 +90,8 @@ public class AssignmentPolicyTests
     {
         var state = new BridgeState();
         var requests = Enumerable.Range(0, 13).Select(i => Request(i.ToString(), "new", i.ToString())).ToList();
-        Assert.Contains("limit", AssignmentPolicy.ValidateBatch(Origin(), requests, state));
-        Assert.Null(AssignmentPolicy.ValidateBatch(Origin(),
+        Assert.Contains("limit", Validate(Origin(), requests, state));
+        Assert.Null(Validate(Origin(),
             Enumerable.Range(0, 13).Select(i => Request(i.ToString(), "self", i.ToString())).ToList(), state));
         var parent = new Delegation { Key = "parent", TargetId = "origin", Protocol = 2, WorkState = "waiting" };
         state.Delegations.Add(parent);
@@ -125,19 +130,30 @@ public class AssignmentPolicyTests
         reader.ApprovalRef = "Approved user scope";
         var state = new BridgeState { Delegations = [reader] };
         var child = Request();
-        Assert.Contains("cannot create writers", AssignmentPolicy.ValidateBatch(origin, [child], state));
+        Assert.Contains("cannot create writers", Validate(origin, [child], state));
         child.AccessMode = "read_only";
         child.Reads = ["docs/a"];
-        Assert.Null(AssignmentPolicy.ValidateBatch(origin, [child], state));
+        Assert.Null(Validate(origin, [child], state));
         child.Reads = [];
-        Assert.Contains("Child Reads", AssignmentPolicy.ValidateBatch(origin, [child], state));
+        Assert.Contains("Child Reads", Validate(origin, [child], state));
         child.Reads = ["../escape"];
-        Assert.Contains("Invalid", AssignmentPolicy.ValidateBatch(origin, [child], state));
+        Assert.Contains("Invalid", Validate(origin, [child], state));
         child.Reads = ["docs"];
         child.Writes = ["docs"];
-        Assert.Contains("cannot declare Writes", AssignmentPolicy.ValidateBatch(origin, [child], state));
+        Assert.Contains("cannot declare Writes", Validate(origin, [child], state));
         child.Writes = [];
         child.AccessMode = "invalid";
-        Assert.Contains("AccessMode", AssignmentPolicy.ValidateBatch(origin, [child], state));
+        Assert.Contains("AccessMode", Validate(origin, [child], state));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-installed")]
+    public void NewRequestsRequireAnInstalledAgentRole(string? agent)
+    {
+        var request = Request();
+        request.Agent = agent;
+
+        Assert.Contains("installed agent role", Validate(Origin(), [request], new BridgeState()));
     }
 }

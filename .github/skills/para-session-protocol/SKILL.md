@@ -76,6 +76,7 @@ Request:
   "prompt": "Self-contained source, scope, parent, approval, criteria, writes, no publishing; read only own state plus allowed shared ledger.",
   "points": 2,
   "mode": "new",
+  "agent": "coder",
   "acceptance": ["Specific independently verifiable outcome"],
   "dependsOn": [],
   "writes": [".github/hooks/para-session.js"],
@@ -83,7 +84,7 @@ Request:
 }
 ```
 
-Use `mode: new` for deferred autonomous work (Bridge starts a managed worker). `mode: self` is legacy-only: queued self requests cannot acquire a reservation because there is no executor handshake. Already granted self work retains ownership and must report explicitly. Optional `agent` selects a role. Request targets of existing sessions are **not supported**. `dependsOn` contains request ids from the **same origin session**, not canonical ids. Unknown dependencies or cycles reject the batch atomically.
+Use `mode: new` for deferred autonomous work (Bridge starts a managed worker). Every new request must set `agent` to an installed role name from `.github/agents/*.agent.md` (for example `coder`, `reviewer` or `researcher`); choose the role best suited to the approved task. The Bridge rejects missing or unavailable roles with an outbox receipt instead of creating an unassigned session. `mode: self` is legacy-only: queued self requests cannot acquire a reservation because there is no executor handshake. Already granted self work retains ownership and must report explicitly. Request targets of existing sessions are **not supported**. `dependsOn` contains request ids from the **same origin session**, not canonical ids. Unknown dependencies or cycles reject the batch atomically.
 
 `writes` lists repo-relative exact files/directories, **no globs, absolute paths or path escape**; an empty array means **exclusive repository**, not read-only or no conflict. Declare all potentially mutated paths; use a directory when needed. State read-only constraints in the prompt, but do not invent a special read-only writes encoding. The Bridge checks overlapping scopes; small tasks are not exempt.
 

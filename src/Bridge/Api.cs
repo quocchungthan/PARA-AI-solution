@@ -119,9 +119,7 @@ public static class Api
         {
             now = DateTimeOffset.UtcNow,
             assignmentProtocol = 2,
-            roles = _agentsDir.Length > 0 && Directory.Exists(_agentsDir)
-                ? Directory.GetFiles(_agentsDir, "*.agent.md").Select(f => Path.GetFileName(f)[..^".agent.md".Length]).Order().ToList()
-                : new List<string>(),
+            roles = AgentProfiles.GetNames(_agentsDir),
             sessions = sessions.OrderByDescending(s => s.UpdatedAt).Select(s => new
             {
                 s.SessionId,

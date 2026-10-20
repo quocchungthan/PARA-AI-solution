@@ -30,6 +30,19 @@ public class AssignmentLoopTests
     }
 
     [Fact]
+    public async Task NewGrantCreatesTheSessionWithItsSelectedInstalledRole()
+    {
+        using var h = new Harness();
+        var request = Request("review", "new", "src/review");
+        request.Agent = "reviewer";
+        h.Origin(request);
+
+        await h.Tick();
+
+        Assert.Equal("reviewer", Assert.Single(h.Runtime.CreatedAgents));
+    }
+
+    [Fact]
     public async Task DependenciesWaitForExplicitDoneAndFailedDependenciesBlockWithoutChurn()
     {
         using var h = new Harness();
@@ -478,7 +491,14 @@ public class AssignmentLoopTests
         public Runtime Runtime { get; } = new();
         public HashSet<string> Live { get; } = new();
         public Scanner Scanner;
-        public Harness() { Scanner = NewScanner(); }
+        public Harness()
+        {
+            var agentsDir = Path.Combine(Root, ".github", "agents");
+            Directory.CreateDirectory(agentsDir);
+            File.WriteAllText(Path.Combine(agentsDir, "coder.agent.md"), "---\nname: coder\n---\n");
+            File.WriteAllText(Path.Combine(agentsDir, "reviewer.agent.md"), "---\nname: reviewer\n---\n");
+            Scanner = NewScanner();
+        }
         public Scanner NewScanner(bool runtime = true) =>
             new(Data, Root, null, 24, runtime ? Runtime : null, () => Clock, _ => null, Live.Contains);
         public BridgeState State => Json.Read<BridgeState>(Path.Combine(Data, "bridge", "state.json"))!;
@@ -512,11 +532,13 @@ public class AssignmentLoopTests
         public ConcurrentDictionary<string, byte> Existing { get; } = new();
         public ConcurrentQueue<(string Id, string Prompt)> Sends { get; } = new();
         public ConcurrentQueue<string> Creates { get; } = new();
+        public ConcurrentQueue<string?> CreatedAgents { get; } = new();
         public Func<string, string, Task<string?>> Handler = (_, _) => Task.FromResult<string?>("turn ended without a report");
         public Task<IAgentSession> CreateAsync(SessionConfig config)
         {
             Existing.TryAdd(config.SessionId!, 0);
             Creates.Enqueue(config.SessionId!);
+            CreatedAgents.Enqueue(config.Agent);
             return Task.FromResult<IAgentSession>(new AgentSession(this, config.SessionId!));
         }
         public Task<IAgentSession> ResumeAsync(string id, ResumeSessionConfig config) =>
