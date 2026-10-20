@@ -9,6 +9,124 @@ import { STATE_COLOR, actionOf, ago, plural, roleOf, stateLabel, titleOf } from 
 import { AnimatedNumber, isFresh } from "./Fx";
 import { AgentGlyph } from "./Glyph";
 import { GlowCard } from "./Effects";
+import { TASK_PHASES, tasksInPhase } from "./workflow";
+
+export function TeamWorkflow() {
+  const all = visibleSessions.value;
+  return (
+    <section className="panel teamWorkflow" aria-labelledby="team-workflow-title">
+      <h2 id="team-workflow-title">Task delivery</h2>
+      <p className="sub">One task, one owner. Analysis first, your approval before implementation. Delivery stays local; no automatic PR.</p>
+      <div className="teamStages">
+        {TASK_PHASES.map((phase) => {
+          const tasks = tasksInPhase(all, phase.key);
+          return (
+            <section key={phase.key} aria-label={phase.label}>
+              <h3>{phase.label} <span className="chip">{tasks.length}</span></h3>
+              {tasks.map((s) => (
+                <button key={s.sessionId} className="teamTask" onClick={() => (openSession.value = s.sessionId)}>
+                  <strong>{titleOf(s)}</strong>
+                  <small>{s.state === "needs_human" ? s.question ?? "Needs your input" : stateLabel(s)}</small>
+                </button>
+              ))}
+              {!tasks.length && <p className="emptyCol">No tasks</p>}
+            </section>
+          );
+        })}
+      </div>
+      <p className="sub">Start a coordinator CLI session with your GitHub issues or Azure Boards query. Existing sessions without a recorded task phase remain in the session queue below.</p>
+    </section>
+  );
+}
+
+export function AssignmentQueue() {
+  const all = snapshot.value?.assignments;
+  const tasks = (all ?? []).filter((a) => a.protocol === 2);
+  const legacy = (all ?? []).filter((a) => a.protocol !== 2);
+  const ledgerError = snapshot.value?.assignmentError;
+  const receipts = (snapshot.value?.outboxReceipts ?? []).filter((r) => r.status === "rejected");
+  const known = new Set(sessions.value.map((s) => s.sessionId));
+  const columns = [
+    { key: "queued", label: "Queued", states: ["queued"] },
+    { key: "running", label: "Running / granted", states: ["running"] },
+    { key: "waiting", label: "Waiting / attention", states: ["waiting", "blocked", "needs_human", "recovery_required"] },
+    { key: "finished", label: "Finished", states: ["done", "failed", "cancelled"] },
+  ];
+  const sessionTasks = tasks.filter((a) => a.originId === openSession.value || a.targetId === openSession.value);
+  return (
+    <section className="panel assignmentQueue" aria-labelledby="assignment-queue-title">
+      <h2 id="assignment-queue-title">Team assignments</h2>
+      <p className="sub">One Bridge-owned list. A delivered message is not completed work; workers report evidence to their creating supervisor.</p>
+      <p className="sub">Tasks are assignments; Sessions are conversations. Self tasks run in their owning CLI after a grant, not in a newly created worker.</p>
+      {!all && !ledgerError && <p className="callout warn" role="status">This Bridge does not expose the assignment list. Restart into the updated Bridge; session Queue cards are not a task queue.</p>}
+      {ledgerError && <p className="callout bad" role="alert">{ledgerError}</p>}
+      {!ledgerError && all && !tasks.length && <p className="emptyCol">No assignments yet. Sessions publish requests through their outbox.</p>}
+      {sessionTasks.length > 0 && <p className="sub">Selected session is linked to {sessionTasks.length} task(s).</p>}
+      <div className="assignmentBoard">
+        {columns.map((column) => {
+          const items = tasks.filter((a) => column.states.includes(a.workState ?? ""));
+          return <section key={column.key} className="assignmentColumn" aria-label={`${column.label} tasks`}>
+            <h3>{column.label} <span className="chip">{items.length}</span></h3>
+            {!items.length && <p className="emptyCol">No tasks</p>}
+        {items.map((a) => (
+          <article className="assignmentItem" key={a.key} aria-label={a.title || a.key}>
+            <div className="assignmentHeading">
+              <h3>{a.title || a.key}</h3>
+              <span className="chip">{(a.workState || a.status).replaceAll("_", " ")}</span>
+              {a.protocol === 2 && <span className="chip">{a.points} point{a.points === 1 ? "" : "s"} · {a.mode === "self" ? "same session" : "delegated"}</span>}
+              {a.protocol !== 2 && <span className="chip">legacy handoff</span>}
+            </div>
+            <p className="assignmentId">{a.key}</p>
+            <p className="sub">Supervisor: {sessions.value.find((s) => s.sessionId === a.originId)?.title || a.originId}</p>
+            <p className="sub">{a.targetId ? `Worker: ${sessions.value.find((s) => s.sessionId === a.targetId)?.title || a.targetId}` : "Worker not created yet"}</p>
+            <div className="assignmentReason">
+              <b>{a.workState === "queued" ? "Why queued" : "Next action"}</b>
+              <p>{a.scheduling?.summary || (a.workState === "queued"
+                ? "The running Bridge has not exposed its scheduling reason. Queued is not proof that a worker is running."
+                : a.mode === "self" && a.workState === "running"
+                  ? "Granted to the owning CLI session. Waiting for its explicit report."
+                  : a.reports.at(-1)?.summary || "Waiting for an explicit worker report.")}</p>
+              {a.scheduling?.blockingAssignmentIds.map((id) => (
+                <p key={id}>Blocking task: {tasks.find((task) => task.key === id)?.title || id}</p>
+              ))}
+            </div>
+            <div className="assignmentLinks">
+              <button type="button" disabled={!known.has(a.originId)} onClick={() => (openSession.value = a.originId)}>Open supervisor</button>
+              <button type="button" disabled={!known.has(a.targetId)} onClick={() => (openSession.value = a.targetId)}>Open worker</button>
+            </div>
+            {!!a.dependsOn.length && <p className="sub">Depends on: {a.dependsOn.join(", ")}</p>}
+            {a.lastError && <p className="callout bad">{a.lastError}</p>}
+            <details>
+              <summary>Scope and reports ({a.reports.length})</summary>
+              {!!a.acceptance.length && <><h4>Acceptance criteria</h4><ul>{a.acceptance.map((text, i) => <li key={i}>{text}</li>)}</ul></>}
+              <p className="sub">Write scope: {a.writes.length ? a.writes.join(", ") : "Exclusive repository"}</p>
+              {!a.reports.length && <p className="sub">No explicit worker report yet.</p>}
+              <ol className="assignmentReports">{[...a.reports].reverse().map((r) => (
+                <li key={r.id}>
+                  <b>{r.kind.replaceAll("_", " ")}</b><p>{r.summary}</p>
+                  {r.verification && <p>Verification: {r.verification}</p>}
+                  {!!r.evidence.length && <p>Evidence: {r.evidence.join(", ")}</p>}
+                  {r.question && <p>Question: {r.question}</p>}
+                </li>
+              ))}</ol>
+            </details>
+          </article>
+        ))}
+          </section>;
+        })}
+      </div>
+      {!!legacy.length && <details><summary>Historical handoffs ({legacy.length})</summary>
+        <ul>{legacy.map((a) => <li key={a.key}>{a.key}: {a.status.replaceAll("_", " ")}</li>)}</ul>
+      </details>}
+      {!!receipts.length && (
+        <details className="callout bad">
+          <summary>Rejected outbox commands ({receipts.length})</summary>
+          <ul>{receipts.map((r) => <li key={`${r.sessionId}:${r.commandId}`}>{r.commandId}: {r.error || "Rejected by the Bridge"}</li>)}</ul>
+        </details>
+      )}
+    </section>
+  );
+}
 
 const COLS: { key: Column; label: string; icon: Icon }[] = [
   { key: "queue", label: "Queue", icon: ListDashes },

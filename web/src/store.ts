@@ -12,6 +12,7 @@ export const API = "http://localhost:5310";
 export type Session = {
   sessionId: string; agent?: string; title?: string; taskType?: string; task?: string;
   state: string; needs: { text: string; resolver: string }[]; question?: string;
+  phase?: string;
   attempts: number; progress: { ts?: string; note?: string }[]; result?: string;
   handoff?: { id: string; target: string; agent?: string; prompt: string } | null;
   updatedAt?: string;
@@ -21,9 +22,29 @@ export type Session = {
   lastActivityAt?: string | null;
   issues?: string[];
 };
-export type Delegation = { key: string; originId: string; targetId: string; status: string; createdAt?: string };
+export type Delegation = {
+  key: string; originId: string; targetId: string; status: string; createdAt?: string;
+  attempts?: number; nextAttemptAt?: string; lastError?: string;
+};
+export type AssignmentReport = {
+  id: string; kind: string; summary: string; evidence: string[];
+  verification?: string; question?: string; createdAt?: string;
+};
+export type Assignment = {
+  key: string; protocol?: number; originId: string; targetId: string; title?: string;
+  mode?: string; rootKey?: string; parentKey?: string; points?: number;
+  workState?: string; status: string; acceptance: string[]; dependsOn: string[];
+  writes: string[]; reports: AssignmentReport[]; lastError?: string;
+  scheduling?: { code: string; summary: string; blockingAssignmentIds: string[] };
+};
+export type OutboxReceipt = {
+  sessionId: string; commandId: string; status: string; assignmentId?: string; error?: string;
+};
 export type Snapshot = {
   now: string; roles?: string[]; sessions: Session[]; delegations: Delegation[]; humanQueue: unknown; log: string[];
+  assignments?: Assignment[]; outboxReceipts?: OutboxReceipt[]; assignmentError?: string;
+  deliveries?: { sessionId: string; messageId: string; from?: string; status: string;
+    attempts: number; nextAttemptAt?: string; lastError?: string; createdAt?: string; deliveredAt?: string }[];
 };
 
 export const serviceOnline = signal<boolean | null>(null);
@@ -33,8 +54,8 @@ export const clock = signal(new Date());
 export const openSession = signal<string | null>(null);
 export const pollCount = signal(0);
 
-export type Page = "overview" | "sessions" | "agents";
-export const PAGES: Page[] = ["overview", "sessions", "agents"];
+export type Page = "overview" | "tasks" | "sessions" | "agents";
+export const PAGES: Page[] = ["overview", "tasks", "sessions", "agents"];
 export const page = signal<Page>("overview");
 // Set when the URL path or #view=<page> is not a route this app knows; renders the 404 page.
 const knownPath = () => /\/(index\.html)?$/.test(location.pathname);

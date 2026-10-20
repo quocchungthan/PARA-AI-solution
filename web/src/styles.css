@@ -321,6 +321,40 @@ main { max-width:1640px; margin:0 auto; padding:22px 28px 40px; }
 .replyFeedback { border-radius:7px; padding:7px 9px; font-size:12px; }
 .replyFeedback.error { color:var(--bad); background:color-mix(in srgb, var(--bad) 10%, transparent); }
 .replyFeedback.success { color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, transparent); }
+.teamStages { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.teamStages > section { min-width:0; border:1px solid var(--border); border-radius:12px; padding:12px; background:var(--panel); }
+.teamStages h3 { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
+.teamTask { display:flex; flex-direction:column; gap:6px; width:100%; margin-top:10px; border:1px solid var(--border); border-radius:8px; padding:10px; text-align:left; background:var(--panel2); color:var(--text); cursor:pointer; overflow-wrap:anywhere; }
+.teamTask small { color:var(--muted); }
+.teamTask:hover { border-color:var(--accent); }
+.assignmentList { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:12px; margin:16px 0; }
+.assignmentItem { min-width:0; padding:14px; border:1px solid var(--border); border-radius:10px; background:var(--panel2); overflow-wrap:anywhere; }
+.assignmentHeading, .assignmentLinks { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.assignmentHeading h3 { flex-basis:100%; margin:0; }
+.assignmentId { font-size:11px; color:var(--muted); }
+.assignmentLinks { margin:12px 0; }
+.assignmentLinks button { min-height:40px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text); cursor:pointer; }
+.assignmentLinks button:disabled { opacity:.55; cursor:not-allowed; }
+.assignmentQueue summary { cursor:pointer; padding:8px 0; }
+.assignmentQueue summary:focus-visible, .assignmentLinks button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.assignmentReports { padding-left:20px; }
+.assignmentReports li { margin-top:12px; }
+.assignmentReports p { white-space:pre-wrap; }
+.assignmentBoard { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; align-items:start; }
+.assignmentColumn { min-width:0; }
+.assignmentColumn > h3 { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; }
+.assignmentColumn .assignmentItem { margin-top:12px; }
+.assignmentReason { border-left:3px solid var(--accent); padding:6px 10px; margin:12px 0; font-size:12px; background:var(--panel); }
+.assignmentReason p { margin:6px 0; white-space:pre-wrap; }
+@media (max-width:1200px) { .assignmentBoard { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:650px) { .assignmentBoard { grid-template-columns:1fr; } }
+.teamTask:focus-visible, .approvalActions button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.approvalActions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.approvalActions p { flex-basis:100%; color:var(--muted); }
+.approvalActions button { min-height:40px; padding:8px 12px; border:1px solid var(--border); border-radius:8px; background:var(--panel2); color:var(--text); cursor:pointer; }
+.approvalActions button:disabled { opacity:.55; cursor:not-allowed; }
+@media (max-width:1100px) { .teamStages { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:600px) { .teamStages { grid-template-columns:1fr; } }
 
 /* ---------- offline ---------- */
 .offlineStage { position:relative; min-height:calc(100dvh - 150px); display:grid; grid-template-columns:minmax(0,1fr); place-items:center; gap:40px; padding:40px 0; }

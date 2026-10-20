@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { agentOf, changedAt, clock, fetchInspection, needsHumanInput, openSession, sendHumanReply, sessions, type Inspection } from "./store";
+import { agentOf, changedAt, clock, fetchInspection, needsHumanInput, openSession, sendHumanReply, sessions, snapshot, type Inspection } from "./store";
 import { STATE_COLOR, ago, roleOf, stateLabel } from "./util";
 import { AgentGlyph } from "./Glyph";
 
@@ -78,10 +78,13 @@ export function Drawer() {
   const now = clock.value.getTime();
   const name = s ? agentOf(s) : "";
   const canReply = s ? needsHumanInput(s) : false;
+  const delivery = [...(snapshot.value?.deliveries ?? [])].reverse()
+    .find((d) => d.sessionId === id && d.from === "user");
+  const replyPending = delivery?.status === "pending" || delivery?.status === "delivering";
   const submitReply = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const message = reply.trim();
-    if (!s || !canReply || !message || sending) return;
+    if (!s || !canReply || !message || sending || replyPending) return;
 
     const sessionId = s.sessionId;
     setSending(true);
@@ -117,15 +120,23 @@ export function Drawer() {
               <span className="badge" style={{ color: STATE_COLOR[s.state], borderColor: STATE_COLOR[s.state] }}>
                 {s.state === "working" && <i className="dot" />} {stateLabel(s)}
               </span>
-              <button className="icon" onClick={() => (openSession.value = null)} title="Close (Esc)">✕</button>
+              <button className="icon" onClick={() => (openSession.value = null)} title="Close (Esc)" aria-label="Close (Esc)">✕</button>
             </div>
             <h2 className="drawerTitle">{s.title && !s.title.startsWith("(") ? s.title : "(untitled)"}</h2>
             <div className="meta">
               {s.taskType && <span className="chip">{s.taskType}</span>}
+              {s.phase && <span className="chip">phase: {s.phase}</span>}
               <span className="chip">updated {ago(s.updatedAt, now)}</span>
               {s.attempts > 0 && <span className="chip">{s.attempts} attempts</span>}
             </div>
             {s.question && <div className="callout warn"><b>Question</b><p>{s.question}</p></div>}
+            {delivery && (
+              <div className={`callout ${delivery.status === "failed" ? "bad" : ""}`} role="status">
+                <b>Your latest reply: {delivery.status}</b>
+                <p>{delivery.attempts} delivery attempt(s){delivery.nextAttemptAt ? `; retry or recovery after ${new Date(delivery.nextAttemptAt).toLocaleTimeString()}` : ""}</p>
+                {delivery.lastError && <p>{delivery.lastError}</p>}
+              </div>
+            )}
             {s.needs.length > 0 && (
               <div className="callout bad"><b>Needs</b>
                 <ul>{s.needs.map((n, i) => <li key={i}>{n.text} <small>· {n.resolver}</small></li>)}</ul>
@@ -138,6 +149,15 @@ export function Drawer() {
             {canReply && (
               <>
                 <h4>Reply to this session</h4>
+                {s.phase === "approval" && (
+                  <div className="approvalActions">
+                    <p>Review the proposed scope below, then select a decision and send it. No PR will be opened automatically.</p>
+                    <button type="button" disabled={sending || replyPending}
+                      onClick={() => setReply("Approved: PARA may implement the proposed scope, verify it and deliver local changes. Do not open a PR, push, merge or close the source task.")}>Approve implementation</button>
+                    <button type="button" disabled={sending || replyPending}
+                      onClick={() => setReply("Defer this task. Keep it in needs_human awaiting my approval; do not implement it until I explicitly approve.")}>Keep for later</button>
+                  </div>
+                )}
                 <form className="replyForm" onSubmit={(event) => void submitReply(event)}>
                   <label htmlFor="session-reply">Your response</label>
                   <textarea id="session-reply" value={reply} rows={4} maxLength={10000}
@@ -149,8 +169,8 @@ export function Drawer() {
                     }} />
                   {replyError && <div className="replyFeedback error" role="alert">{replyError}</div>}
                   {replyQueued && <div className="replyFeedback success" role="status">Reply queued. The Bridge will deliver it to the session.</div>}
-                  <button type="submit" disabled={sending || !reply.trim()}>
-                    {sending ? "Sending…" : "Send reply"}
+                  <button type="submit" disabled={sending || replyPending || !reply.trim()}>
+                    {sending ? "Sending…" : replyPending ? "Awaiting delivery" : "Send reply"}
                   </button>
                 </form>
               </>
