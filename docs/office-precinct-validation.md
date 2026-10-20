@@ -43,7 +43,7 @@ The short reduced-motion samples include fixture polling and state updates; they
 
 ## Checks and evidence
 
-- `npm --prefix web run test:office`: 48/48 passed, including actual-floor route sampling, all role/worker seats, furniture collisions, glass fronts, camera preference validation, exact source identity, runtime remapping and ambient interruption.
+- `npm --prefix web run test:office`: 49/49 passed, including actual-floor route sampling, all role/worker seats, furniture collisions, glass fronts, camera preference validation, exact source identity, runtime remapping and ambient interruption.
 - `npm --prefix web run build`: TypeScript and Vite passed. The existing lazy WebGL bundle still exceeds Vite's advisory chunk size; precinct scenery remains a separate lazy module (about 23 kB minified).
 - `npm run test:e2e:office` from `web/`: 46 passed, 2 production-only cases skipped. Covers roster overflow/reveal, source handoffs, keyboard/touch, camera memory, denied storage, scene/context recovery, optional motion, cast, both themes and viewport sizes, native DPR 2, and resource stability.
 - After the broad run, small precinct-only collision-footprint and glass-sill corrections were verified with the full 48 unit tests, build, and seven targeted precinct/style/resource browser cases, all passing. The broad suite was not repeated after those corrections.
@@ -56,3 +56,10 @@ Screenshots and raw measurements are preserved locally in ignored `web/test-resu
 The phone overview fits the whole miniature, so use room focus and zoom to inspect small props. Full walls and shelves intentionally obscure some interior views; Cutaway walls is the default inspection mode. Scenery follows the approved reference study, including approximate rear rooms. GPU performance depends on browser, driver, display density and device; SwiftShader is much slower. There is no new production dependency, backend change, generated work event, sound, room editor or game mechanic.
 
 Production-path verification also passed: `npm run build -- --base=/office-check/`, followed by `OFFICE_PRODUCTION=1 npx playwright test tests/e2e/office-production.spec.ts` (2/2). This verifies lazy WebGL and precinct modules below `/office-check/`, saved precinct restoration after reload, and recovery after an aborted precinct chunk. A normal-root build was restored afterward.
+
+
+## Independent review
+
+A fresh reviewer found missing collision footprints for filing cabinets and loose chairs. The correction shares loose-chair placement between rendering and navigation and adds a regression derived from rendered geometry for every seat-to-seat reporting route and all permanent-role rest trips. The test failed before the correction and passed afterward. Final verification: 49/49 office unit tests, normal-root build, and three affected browser checks passed (ambient interruption, twenty style round trips, overview and room cameras). The earlier broad browser, hardware and deployment-path measurements were not repeated after this navigation-only correction; scenery placement and detail remain the same.
+
+One minor is deferred: Botanical's cached shadows can retain the preceding wall height after toggling Cutaway walls until another shadow revision, such as a theme change. The wall geometry updates correctly. The independent review identified no critical issues, and its important navigation finding is resolved.

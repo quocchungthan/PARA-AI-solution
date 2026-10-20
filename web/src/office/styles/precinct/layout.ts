@@ -1,7 +1,7 @@
 import type { OfficeLayout, Room, Seat, Wall } from '../../layout';
 import type { OfficeRole, Vec3 } from '../../types';
 import { createWalkGraph } from '../../routes';
-import { PRECINCT_FIXTURES,PRECINCT_PILLARS,PRECINCT_SOLID_STORAGE } from './fixtures';
+import { PRECINCT_FIXTURES,PRECINCT_PILLARS,PRECINCT_SOLID_STORAGE,PRECINCT_CHAIR_OBSTACLES } from './fixtures';
 
 const rooms: Room[] = [
   {id:'team',name:'Detective bullpen',x:0,z:0,width:24,depth:18},
@@ -40,7 +40,7 @@ export const PRECINCT_LAYOUT:OfficeLayout = {
   bounds:{x:0,z:-6,width:31.4,depth:31.3},rooms,
   floorAreas:rooms.map(({x,z,width,depth})=>({x,z,width,depth})),
   desks:PRECINCT_FIXTURES.filter(f=>f.kind==='desk').map(f=>f.footprint),
-  obstacles:[...PRECINCT_FIXTURES.map(f=>f.footprint),...PRECINCT_PILLARS,...PRECINCT_SOLID_STORAGE,...wallRects],walls,
+  obstacles:[...PRECINCT_FIXTURES.map(f=>f.footprint),...PRECINCT_PILLARS,...PRECINCT_SOLID_STORAGE,...PRECINCT_CHAIR_OBSTACLES,...wallRects],walls,
   doors:[[9,0,0],[16,0,0],[24,0,7.8],[24,0,13.5],[6.2,0,18]],
   seats,leads:Object.fromEntries(seats.filter(s=>s.reservedFor).map(s=>[s.reservedFor,s.position])) as OfficeLayout['leads'],
   human:[29.2,0,13.2],humanRotation:-Math.PI/2,entry:[1.5,0,7.5],

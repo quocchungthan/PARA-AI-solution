@@ -33,7 +33,29 @@ export const PRECINCT_FIXTURES: readonly PrecinctFixture[] = [
   fixture('kitchen-dispenser','cabinet',8.02,3.4,.65,.64),
   fixture('kitchen-bin','cabinet',6.5,4.1,.86,.86),
   fixture('lounge-dispenser','cabinet',6.83,18.6,.65,.65),
+  fixture('front-files-0','cabinet',22.8,8.8,.9,.75),
+  fixture('front-files-1','cabinet',22.8,9.58,.9,.75),
+  fixture('coat-stand','cabinet',7,24.5,.6,.6),
+  fixture('front-pipe','cabinet',23.48,10.5,.3,.3),
+  fixture('captain-pipe','cabinet',23.45,16.3,.18,.18),
 ];
+
+type LooseChair = {position:Vec3;rotation:number;area:'bullpen'|'offices'|'lounge'|'kitchen';color:string};
+const transform=(x:number,z:number,rotation:number,dx:number,dz:number):Vec3=>
+  [x+dx*Math.cos(rotation)+dz*Math.sin(rotation),0,z-dx*Math.sin(rotation)+dz*Math.cos(rotation)];
+// Chairs outside occupied work seats share their geometry and collision placement.
+export const PRECINCT_LOOSE_CHAIRS:readonly LooseChair[]=[
+  ...PRECINCT_FIXTURES.filter(f=>f.id.startsWith('bullpen-')||f.id==='side-desk').flatMap((f,i)=>
+    [2,5,7,8].includes(i)?[]:[{position:transform(f.position[0],f.position[2],f.rotation,.78,-1.45),rotation:f.rotation,area:f.id==='side-desk'?'offices' as const:'bullpen' as const,color:'#b5b39a'}]),
+  ...[-.9,1].map(x=>({position:transform(27.7,13.2,Math.PI/2,x,-1.6),rotation:Math.PI/2,area:'offices' as const,color:'#3e4b43'})),
+  ...[0,1,2].map(i=>{const a=i/3*Math.PI*2;return {position:transform(3.45,21.1,0,Math.sin(a)*1.25,Math.cos(a)*1.25),rotation:a+Math.PI,area:'lounge' as const,color:'#383e3d'};}),
+  ...[-1,1].map(s=>({position:[4.05+s*1.25,0,4.25] as Vec3,rotation:-s*Math.PI/2,area:'kitchen' as const,color:'#acb0a4'})),
+];
+export const PRECINCT_CHAIR_OBSTACLES:readonly Rect[]=PRECINCT_LOOSE_CHAIRS.map(c=>{
+  const w=Math.abs(Math.cos(c.rotation))*1.04+Math.abs(Math.sin(c.rotation))*.96;
+  const d=Math.abs(Math.sin(c.rotation))*1.04+Math.abs(Math.cos(c.rotation))*.96;
+  return {x:c.position[0]-w/2,z:c.position[2]-d/2,width:w,depth:d};
+});
 
 // Decorative storage also blocks circulation beside the staggered desks.
 const deskStorage=PRECINCT_FIXTURES.filter(f=>f.id.startsWith('bullpen-')).flatMap((f,i)=>{
