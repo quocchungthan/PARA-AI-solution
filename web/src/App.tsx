@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Check, Copy, Kanban, Moon, SquaresFour, Sun, UsersThree, X, type Icon } from "@phosphor-icons/react";
+import { Bell, ChatCircleText, Check, Copy, Kanban, Moon, SquaresFour, Sun, UsersThree, X, type Icon } from "@phosphor-icons/react";
 import {
   API, clock, counts, dark, goToSession, markAllRead, notFound, notices, openPage, page, serviceOnline, snapshot,
   toast, toggleTheme, unread, type Page,
@@ -15,7 +15,7 @@ import { Competitors } from "./Competitors";
 const TABS: { key: Page; label: string; icon: Icon }[] = [
   { key: "overview", label: "Overview", icon: SquaresFour },
   { key: "tasks", label: "Tasks", icon: Kanban },
-  { key: "sessions", label: "Sessions", icon: Kanban },
+  { key: "sessions", label: "Sessions", icon: ChatCircleText },
   { key: "agents", label: "Agents", icon: UsersThree },
 ];
 

@@ -4,14 +4,14 @@ import { session, snapshot } from "../office/fixtures";
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }, { width: 812, height: 375 }]) {
   for (const theme of ["light", "dark"]) {
-    test(`assignment reports stay distinct from delivery at ${viewport.width}px in ${theme}`, async ({ page }) => {
+    test(`assignment reports stay distinct from delivery at ${viewport.width}px in ${theme}`, async ({ page }, testInfo) => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
       const origin = "472ba074-289c-4cd6-9695-f0539f5ad6ec";
       const worker = "6de3445c-0470-4188-9130-a50637668652";
       const snap = snapshot([
         session(origin, "coordinator", "waiting_input", { title: "Supervisor", question: "Waiting for task reports" }),
-        session(worker, "coder", "waiting_input", { title: "Worker", question: "Waiting for a prerequisite" }),
+        session(worker, "coder", "waiting_input", { title: "Bridge message assignment:opaque", question: "Waiting for a prerequisite" }),
       ], [], {
         assignments: [{
           key: `${origin}:out:identity`, protocol: 2, originId: origin, targetId: worker,
@@ -47,6 +47,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 
       await expect(dependent).toContainText("Depends on:");
       await expect(dependent).toContainText("Why queued");
       await expect(dependent).toContainText("Blocking task: Preserve source identity");
+      await task.getByRole("button", { name: "Open worker", exact: true }).click();
+      await expect(page.locator(".drawerTitle")).toHaveText("Preserve source identity");
+      await expect(page.locator(".sessionAssignments")).toContainText("Preserve source identity");
+      await expect(page.locator(".sessionAssignments")).toContainText("Worker · 1 report");
+      await page.getByRole("button", { name: "Close (Esc)" }).click();
       await queue.getByText("Rejected outbox commands (1)", { exact: true }).click();
       await expect(queue.getByText("invalid: Executable tasks must be 1-2 points.", { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
@@ -66,6 +71,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 
       await expect(task).toContainText("Evidence: tests/ImportIdentityTests.cs");
       // A child completion does not mark its waiting sibling or root conversation done.
       await expect(dependent).toContainText("queued");
+      await page.getByRole("button", { name: "View sessions", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Session phases" })).toBeVisible();
+      await page.getByRole("button", { name: "View assignments", exact: true }).click();
+      await expect(queue).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath("assignments.png"), fullPage: true });
     });
   }
 

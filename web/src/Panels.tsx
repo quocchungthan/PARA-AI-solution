@@ -15,9 +15,11 @@ export function TeamWorkflow() {
   const all = visibleSessions.value;
   return (
     <section className="panel teamWorkflow" aria-labelledby="team-workflow-title">
-      <h2 id="team-workflow-title">Session phases</h2>
-      <p className="sub">Recorded phases are not execution status. A session under Implement may be waiting or need your input. Delivery stays local; no automatic PR.</p>
-      <button type="button" className="teamTask" onClick={() => (page.value = "tasks")}>View canonical assignments and scheduling blockers in Tasks</button>
+      <div className="workflowHeader">
+        <div><h2 id="team-workflow-title">Session phases</h2>
+          <p className="sub">Recorded phases are not execution status. Delivery stays local; no automatic PR.</p></div>
+        <button type="button" className="workflowButton" onClick={() => (page.value = "tasks")}><KanbanIcon aria-hidden="true" size={16} /> View assignments</button>
+      </div>
       <div className="teamStages">
         {TASK_PHASES.map((phase) => {
           const tasks = tasksInPhase(all, phase.key);
@@ -27,7 +29,7 @@ export function TeamWorkflow() {
               {tasks.map((s) => (
                 <button key={s.sessionId} className="teamTask" onClick={() => (openSession.value = s.sessionId)}>
                   <strong>{linkedSessionTitle(s, snapshot.value?.assignments)}</strong>
-                  <small>{sessionExecution(s)}</small>
+                  <small className="workflowStatus" data-state={s.state}>{sessionExecution(s)}</small>
                   {s.question && <small>{s.question}</small>}
                 </button>
               ))}
@@ -49,17 +51,20 @@ export function AssignmentQueue() {
   const receipts = (snapshot.value?.outboxReceipts ?? []).filter((r) => r.status === "rejected");
   const known = new Set(sessions.value.map((s) => s.sessionId));
   const columns = [
-    { key: "queued", label: "Queued", states: ["queued"] },
-    { key: "running", label: "Running / granted", states: ["running"] },
-    { key: "waiting", label: "Waiting / attention", states: ["waiting", "blocked", "needs_human", "recovery_required"] },
-    { key: "finished", label: "Finished", states: ["done", "failed", "cancelled"] },
+    { key: "queued", label: "Queued" },
+    { key: "running", label: "Running / granted" },
+    { key: "waiting", label: "Waiting / attention" },
+    { key: "finished", label: "Finished" },
   ];
   const sessionTasks = tasks.filter((a) => a.originId === openSession.value || a.targetId === openSession.value);
   return (
     <section className="panel assignmentQueue" aria-labelledby="assignment-queue-title">
-      <h2 id="assignment-queue-title">Team assignments</h2>
-      <p className="sub">One Bridge-owned list. A delivered message is not completed work; workers report evidence to their creating supervisor.</p>
-      <p className="sub">Tasks are managed assignments; Sessions are conversations. Independent approved CLI work does not require a Bridge grant. A running grant is ownership, not proof of active execution.</p>
+      <div className="workflowHeader">
+        <div><h2><span id="assignment-queue-title">Team assignments</span> <span className="chip">{tasks.length} tasks</span></h2>
+          <p className="sub">Managed work, scheduling blockers and explicit worker reports.</p></div>
+        <button type="button" className="workflowButton" onClick={() => (page.value = "sessions")}><UsersThree aria-hidden="true" size={16} /> View sessions</button>
+      </div>
+      <p className="workflowHint">A grant reserves ownership; it does not prove activity. Independent approved CLI work needs no Bridge grant.</p>
       {!all && !ledgerError && <p className="callout warn" role="status">This Bridge does not expose the assignment list. Restart into the updated Bridge; session Queue cards are not a task queue.</p>}
       {ledgerError && <p className="callout bad" role="alert">{ledgerError}</p>}
       {!ledgerError && all && !tasks.length && <p className="emptyCol">No assignments yet. Sessions publish requests through their outbox.</p>}
@@ -71,18 +76,22 @@ export function AssignmentQueue() {
             <h3>{column.label} <span className="chip">{items.length}</span></h3>
             {!items.length && <p className="emptyCol">No tasks</p>}
         {items.map((a) => (
-          <article className="assignmentItem" key={a.key} aria-label={a.title || a.key}>
+          <article className="assignmentItem" data-state={a.workState || "unknown"} key={a.key} aria-label={a.title || a.key}>
             <div className="assignmentHeading">
               <h3>{a.title || a.key}</h3>
-              <span className="chip">{(a.workState || a.status || "unknown").replaceAll("_", " ")}</span>
+              <span className="chip workflowStatus" data-state={a.workState || "unknown"}>{(a.workState || a.status || "unknown").replaceAll("_", " ")}</span>
               {a.protocol === 2 && <span className="chip">{a.points} point{a.points === 1 ? "" : "s"} · {a.mode === "self" ? "same session" : "delegated"}</span>}
               {a.protocol !== 2 && <span className="chip">legacy handoff</span>}
             </div>
-            <p className="assignmentId">{a.key}</p>
-            <p className="sub">Supervisor: {sessions.value.find((s) => s.sessionId === a.originId)?.title || a.originId}</p>
-            <p className="sub">{a.targetId ? `Worker: ${sessions.value.find((s) => s.sessionId === a.targetId)?.title || a.targetId}` : "Worker not created yet"}</p>
+            <dl className="assignmentPeople">
+              <div><dt>Supervisor</dt><dd>{sessions.value.find((s) => s.sessionId === a.originId)?.title || a.originId}</dd></div>
+              <div><dt>Worker</dt><dd>{a.targetId ? (() => {
+                const worker = sessions.value.find((s) => s.sessionId === a.targetId);
+                return worker ? linkedSessionTitle(worker, tasks) : a.targetId;
+              })() : "Not created yet"}</dd></div>
+            </dl>
             <div className="assignmentReason">
-              <b>{a.workState === "queued" ? "Why queued" : "Next action"}</b>
+              <b>{a.workState === "queued" ? "Why queued" : assignmentColumn(a) === "finished" ? "Outcome" : "Next action"}</b>
               <p>{a.scheduling?.summary || (a.workState === "queued"
                 ? "The running Bridge has not exposed its scheduling reason. Queued is not proof that a worker is running."
                 : a.mode === "self" && a.workState === "running"
@@ -105,6 +114,7 @@ export function AssignmentQueue() {
             {a.lastError && <p className="callout bad">{a.lastError}</p>}
             <details>
               <summary>Scope and reports ({a.reports.length})</summary>
+              <p className="assignmentId">Assignment ID: {a.key}</p>
               {!!a.acceptance.length && <><h4>Acceptance criteria</h4><ul>{a.acceptance.map((text, i) => <li key={i}>{text}</li>)}</ul></>}
               <p className="sub">{assignmentScope(a)}</p>
               {!a.reports.length && <p className="sub">No explicit worker report yet.</p>}

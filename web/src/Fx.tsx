@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { agentOf, changedAt, clock, fetchInspection, needsHumanInput, openSession, sendHumanReply, sessions, snapshot, type Inspection } from "./store";
 import { STATE_COLOR, ago, roleOf, stateLabel } from "./util";
 import { AgentGlyph } from "./Glyph";
+import { linkedSessionTitle, sessionExecution } from "./workflow";
 
 // Live look into the session's own Copilot event log, refreshed while the drawer is open.
 function InspectorPanel({ sessionId }: { sessionId: string }) {
@@ -122,13 +123,27 @@ export function Drawer() {
               </span>
               <button className="icon" onClick={() => (openSession.value = null)} title="Close (Esc)" aria-label="Close (Esc)">✕</button>
             </div>
-            <h2 className="drawerTitle">{s.title && !s.title.startsWith("(") ? s.title : "(untitled)"}</h2>
+            <h2 className="drawerTitle">{linkedSessionTitle(s, snapshot.value?.assignments)}</h2>
             <div className="meta">
               {s.taskType && <span className="chip">{s.taskType}</span>}
               {s.phase && <span className="chip">phase: {s.phase}</span>}
               <span className="chip">updated {ago(s.updatedAt, now)}</span>
               {s.attempts > 0 && <span className="chip">{s.attempts} attempts</span>}
             </div>
+            <p className="workflowHint">{sessionExecution(s)}{s.phase ? " · Phase and execution status are tracked separately." : ""}</p>
+            {(snapshot.value?.assignments ?? []).some((a) => a.protocol === 2 && (a.originId === s.sessionId || a.targetId === s.sessionId)) && (
+              <div className="sessionAssignments">
+                <h4>Linked assignments</h4>
+                {(snapshot.value?.assignments ?? []).filter((a) => a.protocol === 2 && (a.originId === s.sessionId || a.targetId === s.sessionId)).map((a) => (
+                  <div key={a.key} className="sessionAssignment">
+                    <strong>{a.title || a.key}</strong>
+                    <span className="workflowStatus" data-state={a.workState || "unknown"}>{(a.workState || "unknown").replaceAll("_", " ")}</span>
+                    <small>{a.targetId === s.sessionId ? "Worker" : "Supervisor"} · {a.reports.length} report{a.reports.length === 1 ? "" : "s"}</small>
+                    {a.scheduling?.summary && <p>{a.scheduling.summary}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
             {s.question && <div className="callout warn"><b>Question</b><p>{s.question}</p></div>}
             {delivery && (
               <div className={`callout ${delivery.status === "failed" ? "bad" : ""}`} role="status">
