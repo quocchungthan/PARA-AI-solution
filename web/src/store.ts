@@ -35,6 +35,7 @@ export type Assignment = {
   mode?: string; rootKey?: string; parentKey?: string; points?: number;
   workState?: string; status: string; acceptance: string[]; dependsOn: string[];
   writes: string[]; reports: AssignmentReport[]; lastError?: string;
+  accessMode?: string; reads?: string[];
   scheduling?: { code: string; summary: string; blockingAssignmentIds: string[] };
 };
 export type OutboxReceipt = {

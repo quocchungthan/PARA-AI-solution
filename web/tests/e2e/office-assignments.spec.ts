@@ -81,3 +81,26 @@ test("an unreadable ledger is not presented as an empty successful queue", async
   await expect(queue.getByRole("alert")).toContainText("could not be read");
   await expect(queue.getByText("No assignments yet.", { exact: false })).toHaveCount(0);
 });
+
+test("unknown assignments remain visible and read-only scope is not shown as exclusive", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const base = { protocol: 2, originId: "origin", targetId: "", status: "queued",
+    acceptance: [], dependsOn: [], writes: [], reports: [] };
+  await installSnapshotRoute(page, snapshot([], [], { assignments: [
+    { ...base, key: "unknown", title: "Unrecognized state", workState: "unexpected" },
+    { ...base, key: "self", title: "Legacy attended", mode: "self", workState: "queued" },
+    { ...base, key: "read", title: "Read contract", workState: "queued", accessMode: "read_only", reads: ["docs"] },
+  ] }));
+  await page.goto("/#view=tasks");
+  const unknown = page.getByRole("region", { name: "Waiting / attention tasks" })
+    .getByRole("article", { name: "Unrecognized state" });
+  await expect(unknown).toContainText("Execution state is unknown");
+  const self = page.getByRole("article", { name: "Legacy attended" });
+  await expect(self).toContainText("cancel this ungranted request");
+  await expect(self).toContainText("has not exposed its scheduling reason");
+  const read = page.getByRole("article", { name: "Read contract" });
+  await read.getByText("Scope and reports (0)", { exact: true }).click();
+  await expect(read).toContainText("Read-only scope: docs; no source writes");
+  await expect(read).not.toContainText("Exclusive repository");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});

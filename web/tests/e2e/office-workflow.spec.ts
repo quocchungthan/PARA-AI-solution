@@ -31,10 +31,10 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 
         await route.fulfill({ status: 202, headers, json: { messageId: "decision", status: "pending" } });
       });
       await page.goto("/#view=sessions");
-      await expect(page.getByRole("heading", { name: "Task delivery" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Session phases" })).toBeVisible();
       if (theme === "dark") await page.getByRole("button", { name: "Toggle theme" }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      const board = page.getByRole("region", { name: "Task delivery" });
+      const board = page.getByRole("region", { name: "Session phases" });
       await expect(board.getByRole("region", { name: "Your approval" }).getByRole("button", { name: /Fix issue import/ })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
       await board.getByRole("button", { name: /Fix issue import/ }).click();
@@ -57,6 +57,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 
       await expect(approve).toHaveCount(0);
       await page.getByRole("button", { name: "Close (Esc)" }).click();
       await expect(board.getByRole("region", { name: "Implement", exact: true }).getByRole("button", { name: /Fix issue import/ })).toBeVisible();
+      snap.sessions[0] = { ...task, phase: "implementation", state: "needs_human" };
+      api.setSnapshot(structuredClone(snap));
+      const blocked = board.getByRole("region", { name: "Implement", exact: true }).getByRole("button", { name: /Fix issue import/ });
+      await expect(blocked).toContainText("Needs your input");
+      await expect(board).toContainText("Recorded phases are not execution status");
     });
   }
 }
