@@ -75,6 +75,15 @@ refactoring guidance, use the [agent-guidance-design skill](.github/skills/agent
 to keep portable principles separate from project-specific overlays and avoid
 duplicated sources of truth.
 
+The [Product Owner](.github/agents/product-owner.agent.md) evaluates goal
+alignment, evidence-backed backlog changes, priority tradeoffs and experiment
+proposals. PARA-managed 30s work follows the
+[canonical 30s goal and participation context](.github/product-context/30s.md)
+at bug/feature intake and its other specified decision points. Publication
+and reprioritization require an explicitly approved planning batch; live
+experiments and implementation need separate approval. This is review guidance,
+not an always-running agent, runtime subscription or automatic CLI wake feature.
+
 See **[Durable assignment loop](docs/assignment-loop.md)** for the persisted
 architecture, chess-agent lessons, command examples, operating limits and team
 breakdown. Existing scalar `handoff` remains compatible; new team work uses

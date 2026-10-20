@@ -58,6 +58,7 @@ export function Character({
       "functional-reviewer": "#af7054",
       hr: "#b9c7ab",
       "scrum-master": "#6d925d",
+      "product-owner": "#8f76a8",
       unknown: "#8d9294",
     };
     const shirt = kind === "human" ? "#354f68" : outfit[role];

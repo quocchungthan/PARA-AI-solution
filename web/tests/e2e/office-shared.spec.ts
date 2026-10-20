@@ -29,7 +29,7 @@ test("shared: empty office and disappearing selected records preserve the scene"
   await page.goto("/");
   const canvas = page.locator(".officeCanvas canvas");
   await expect(canvas).toBeVisible({ timeout: 20000 });
-  await expect(page.locator(".officeActorLabel")).toHaveCount(8);
+  await expect(page.locator(".officeActorLabel")).toHaveCount(9);
   await expect(page.getByText("No sessions yet.", { exact: true })).toBeVisible();
   const handle = await canvas.elementHandle();
   api.setSnapshot(snapshot([session("human"), session("assistant", "coordinator")], [delegation("missing", "absent-a", "absent-b", "failed")]));
@@ -84,7 +84,7 @@ test("shared: overflow reveal and departure refill stay within ten workers", asy
   await page.goto("/");
   const workers = page.locator('.officeActorLabel[data-kind="worker"]');
   await expect(workers).toHaveCount(10, { timeout: 20000 });
-  await expect(page.locator(".officeActorLabel")).toHaveCount(18);
+  await expect(page.locator(".officeActorLabel")).toHaveCount(19);
   await expect(page.locator(".officeSession")).toHaveCount(12);
   await expect(page.locator(".officeSessionList > summary")).toContainText("12 live · 10 in 3D · 2 list only");
   await page.locator(".officeSession").filter({ hasText: "Task task-10" }).click();

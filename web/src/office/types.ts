@@ -7,6 +7,7 @@ export type OfficeRole =
   | "functional-reviewer"
   | "hr"
   | "scrum-master"
+  | "product-owner"
   | "unknown";
 export type SessionPresentation = {
   state: string;
