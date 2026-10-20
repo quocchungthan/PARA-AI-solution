@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { installSnapshotRoute } from "./snapshotRoute";
-import { populated } from "../office/fixtures";
+import { populated, session, snapshot } from "../office/fixtures";
 test("characters: stable lead identities, unknown workers, drag protection and maximum-population evidence", async ({
   page,
 }) => {
@@ -59,7 +59,7 @@ test("characters: ten workers, permanent identities, actor selection and drag pr
   await expect(scene.locator('[data-kind="worker"]')).toHaveCount(10, {
     timeout: 20000,
   });
-  await expect(scene.locator('[data-kind="lead"]')).toHaveCount(6);
+  await expect(scene.locator('[data-kind="lead"]')).toHaveCount(7);
   await expect(scene.locator('[data-kind="assistant"]')).toHaveCount(1);
   await expect(scene.locator('[data-kind="human"]')).toHaveCount(1);
   await expect(
@@ -85,4 +85,28 @@ test("characters: ten workers, permanent identities, actor selection and drag pr
   await expect(
     page.getByRole("complementary", { name: "Office observation" }),
   ).toContainText("Session worker");
+});
+
+for (const styleId of ["botanical","precinct"] as const) test(`Product Owner is visible and inspectable without a running session in ${styleId}`, async ({ page }) => {
+  test.setTimeout(60000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const api = await installSnapshotRoute(page, snapshot([], [], { roles: ["product-owner"] }));
+  await page.goto("/");
+  if(styleId === "precinct") await page.getByLabel("Office style", {exact:true}).selectOption(styleId);
+  const scene = page.getByLabel("3D office", { exact: true });
+  const lead = scene.getByRole("button", { name: "Inspect Product Owner lead", exact: true });
+  await expect(lead).toBeVisible({ timeout: 20000 });
+  await page.locator(".splash").waitFor({ state: "detached" });
+  const rosterLead = page.getByLabel("Office roster").getByRole("button", { name: "Product Owner lead", exact: true });
+  await rosterLead.focus();
+  await expect(rosterLead).toBeFocused();
+  await rosterLead.press("Enter");
+  const details = page.getByRole("complementary", { name: "Office observation" });
+  await expect(details.getByRole("heading", { name: "Product Owner", exact: true })).toBeVisible();
+  await expect(details).toContainText("0 working");
+  await expect(details).toContainText("prioritizes evidence-backed outcomes");
+  await expect(details).toContainText("Permanent representatives are not separate agent sessions.");
+  api.setSnapshot(snapshot([session("product-review", "product-owner")]));
+  await expect(details).toContainText("1 working");
+  await expect(details.getByRole("button", { name: "Task product-review", exact: true })).toBeVisible();
 });

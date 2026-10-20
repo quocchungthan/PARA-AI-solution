@@ -183,10 +183,13 @@ export function OfficeDetails({
             .map((d) => (
               <p key={d.key}>
                 Handoff · {d.targetId} · {d.status}
+                {d.attempts ? ` · ${d.attempts} attempt(s)` : ""}
+                {d.nextAttemptAt ? ` · retry at ${new Date(d.nextAttemptAt).toLocaleTimeString()}` : ""}
                 {!runtime.model.sessionsById.has(d.targetId) &&
                   ["assigned", "result_fed"].includes(d.status)
                   ? " · awaiting session record"
                   : ""}
+                {d.lastError ? ` · last error: ${d.lastError}` : ""}
               </p>
             ))}
           <button

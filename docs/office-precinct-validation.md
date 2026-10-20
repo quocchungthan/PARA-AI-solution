@@ -5,7 +5,7 @@ Validated against the approved v2 miniature study and the user's overview, loung
 ## Presentation and source behavior
 
 - Two locally remembered styles; separate cameras; independent light/dark theme.
-- Eight permanent cast representatives and at most ten temporary workers. Source names, status, selection and handoff IDs remain authoritative.
+- Nine permanent representatives, including Product Owner from current main, and at most ten temporary workers. Source names, status, selection and handoff IDs remain authoritative.
 - Native antialiased rendering with DPR 1.5–2; higher prop detail is geometric, with small procedural screen/badge/flag textures.
 - Optional visits have 20–40 second cooldowns and 3–5 second pauses. Work, selection, connectivity and reduced motion take priority.
 - Roster and details survive asynchronous loading, failed chunks, graphics recovery and denied storage.
@@ -63,3 +63,11 @@ Production-path verification also passed: `npm run build -- --base=/office-check
 A fresh reviewer found missing collision footprints for filing cabinets and loose chairs. The correction shares loose-chair placement between rendering and navigation and adds a regression derived from rendered geometry for every seat-to-seat reporting route and all permanent-role rest trips. The test failed before the correction and passed afterward. Final verification: 49/49 office unit tests, normal-root build, and three affected browser checks passed (ambient interruption, twenty style round trips, overview and room cameras). The earlier broad browser, hardware and deployment-path measurements were not repeated after this navigation-only correction; scenery placement and detail remain the same.
 
 One minor is deferred: Botanical's cached shadows can retain the preceding wall height after toggling Cutaway walls until another shadow revision, such as a theme change. The wall geometry updates correctly. The independent review identified no critical issues, and its important navigation finding is resolved.
+
+## PR integration with current main
+
+The PR branch incorporates main at `4da7ee7`, including the Product Owner role and current task/assignment workflow. Product Owner retains its upstream Botanical seat and has a reserved Records desk in Precinct; a second Records worker chair maintains ten unreserved seats. There are now nine permanent representatives plus up to ten temporary workers. The original eight cast mappings remain unchanged; Product Owner uses the existing Karen appearance.
+
+After resolving the moved-layout and actor-test conflicts, verification passed: 53/53 office unit tests, application build, UI library build, and 20 Edge browser checks covering Product Owner in both styles, task approval, assignment reports, style/camera preservation, both viewport/theme screenshot matrices, and DPR 2. Screenshot captures committed under `docs/images/precinct-office/` reflect this integrated branch. The earlier performance tables measure the preceding 18-character scene; they have not been remeasured with the additional Product Owner representative. CI now explicitly builds the `/office-check/` base before its dedicated production tests.
+
+The integrated branch also passed both production subpath cases (2/2), including failed-chunk retry. A normal-root build was restored afterward.

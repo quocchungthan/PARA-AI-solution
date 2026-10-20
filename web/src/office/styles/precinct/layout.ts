@@ -14,7 +14,7 @@ const rooms: Room[] = [
 ];
 const roles: Partial<Record<string,OfficeRole>> = {
   'bullpen-0':'functional-reviewer','bullpen-1':'coder','bullpen-2':'reviewer',
-  'bullpen-3':'scrum-master','bullpen-4':'coordinator','side-desk':'hr','research-desk':'researcher',
+  'bullpen-3':'scrum-master','bullpen-4':'coordinator','side-desk':'hr','research-desk':'researcher','rear-desk':'product-owner',
 };
 const seats: Seat[] = PRECINCT_FIXTURES.filter(f=>f.kind==='desk'&&f.id!=='captain-desk').map(f=>{
   const [x,,z]=f.position, side=f.rotation===Math.PI?-1:1;
@@ -25,6 +25,7 @@ const seats: Seat[] = PRECINCT_FIXTURES.filter(f=>f.kind==='desk'&&f.id!=='capta
 });
 // Records seating supplements the briefing and bullpen without changing the outline.
 seats.push({id:'records-worker',position:[9.5,0,-2.5],approach:[9.5,0,-1.5],rotation:Math.PI});
+seats.push({id:'records-worker-2',position:[8,0,-2.5],approach:[8,0,-1.5],rotation:Math.PI});
 const wall = (x1:number,z1:number,x2:number,z2:number,cutawayHeight=1.1):Wall => ({from:[x1,0,z1],to:[x2,0,z2],height:3.25,cutawayHeight});
 const walls: Wall[] = [
   wall(0,-5,0,25.3,.65),wall(0,-5,4,-5,3.25),wall(4,-5,4,-1.5),

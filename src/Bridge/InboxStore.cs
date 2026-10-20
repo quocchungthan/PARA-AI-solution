@@ -9,6 +9,21 @@ public static class InboxStore
     public static Task EnqueueAsync(string path, InboxMessage message) =>
         UpdateFileAsync(path, inbox => inbox.Messages.Add(message));
 
+    public static Task EnqueueHumanReplyAsync(string path, InboxMessage message) =>
+        UpdateFileAsync(path, inbox =>
+        {
+            if (inbox.Messages.Any(m => m.From == "user" && m.Status is "pending" or "delivering"))
+                throw new InvalidOperationException("A reply is already queued or being delivered for this session.");
+            inbox.Messages.Add(message);
+        });
+
+    public static Task EnqueueIfAbsentAsync(string path, InboxMessage message) =>
+        UpdateFileAsync(path, inbox =>
+        {
+            if (inbox.Messages.All(m => m.Id != message.Id))
+                inbox.Messages.Add(message);
+        });
+
     public static Task UpdateMessageAsync(string path, InboxMessage message) =>
         UpdateFileAsync(path, inbox =>
         {
@@ -17,6 +32,10 @@ public static class InboxStore
             existing.Status = message.Status;
             existing.Response = message.Response;
             existing.DeliveredAt = message.DeliveredAt;
+            existing.Attempts = message.Attempts;
+            existing.LastAttemptAt = message.LastAttemptAt;
+            existing.NextAttemptAt = message.NextAttemptAt;
+            existing.LastError = message.LastError;
         });
 
     static async Task UpdateFileAsync(string path, Action<InboxFile> update)

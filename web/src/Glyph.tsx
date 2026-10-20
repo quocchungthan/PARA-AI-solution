@@ -3,6 +3,7 @@ import { colorOf } from "./util";
 
 const ICONS: Record<string, Icon> = {
   coordinator: CompassTool, coder: Code, researcher: MagnifyingGlassPlus, reviewer: SealCheck, "scrum-master": FlagBanner,
+  "product-owner": FlagBanner,
 };
 
 export function AgentGlyph({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {

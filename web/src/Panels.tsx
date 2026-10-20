@@ -9,6 +9,141 @@ import { STATE_COLOR, actionOf, ago, plural, roleOf, stateLabel, titleOf } from 
 import { AnimatedNumber, isFresh } from "./Fx";
 import { AgentGlyph } from "./Glyph";
 import { GlowCard } from "./Effects";
+import { assignmentColumn, assignmentScope, linkedSessionTitle, sessionExecution, TASK_PHASES, tasksInPhase } from "./workflow";
+
+export function TeamWorkflow() {
+  const all = visibleSessions.value;
+  return (
+    <section className="panel teamWorkflow" aria-labelledby="team-workflow-title">
+      <div className="workflowHeader">
+        <div><h2 id="team-workflow-title">Session phases</h2>
+          <p className="sub">Recorded phases are not execution status. Delivery stays local; no automatic PR.</p></div>
+        <button type="button" className="workflowButton" onClick={() => (page.value = "tasks")}><KanbanIcon aria-hidden="true" size={16} /> View assignments</button>
+      </div>
+      <div className="teamStages">
+        {TASK_PHASES.map((phase) => {
+          const tasks = tasksInPhase(all, phase.key);
+          return (
+            <section key={phase.key} aria-label={phase.label}>
+              <h3>{phase.label} <span className="chip">{tasks.length}</span></h3>
+              {tasks.map((s) => (
+                <button key={s.sessionId} className="teamTask" onClick={() => (openSession.value = s.sessionId)}>
+                  <strong>{linkedSessionTitle(s, snapshot.value?.assignments)}</strong>
+                  <small className="workflowStatus" data-state={s.state}>{sessionExecution(s)}</small>
+                  {s.question && <small>{s.question}</small>}
+                </button>
+              ))}
+              {!tasks.length && <p className="emptyCol">No sessions</p>}
+            </section>
+          );
+        })}
+      </div>
+      <p className="sub">Start a coordinator CLI session with your GitHub issues or Azure Boards query. Existing sessions without a recorded task phase remain in the session queue below.</p>
+    </section>
+  );
+}
+
+export function AssignmentQueue() {
+  const all = snapshot.value?.assignments;
+  const tasks = (all ?? []).filter((a) => a.protocol === 2);
+  const legacy = (all ?? []).filter((a) => a.protocol !== 2);
+  const ledgerError = snapshot.value?.assignmentError;
+  const receipts = (snapshot.value?.outboxReceipts ?? []).filter((r) => r.status === "rejected");
+  const known = new Set(sessions.value.map((s) => s.sessionId));
+  const columns = [
+    { key: "queued", label: "Queued" },
+    { key: "running", label: "Running / granted" },
+    { key: "waiting", label: "Waiting / attention" },
+    { key: "finished", label: "Finished" },
+  ];
+  const sessionTasks = tasks.filter((a) => a.originId === openSession.value || a.targetId === openSession.value);
+  return (
+    <section className="panel assignmentQueue" aria-labelledby="assignment-queue-title">
+      <div className="workflowHeader">
+        <div><h2><span id="assignment-queue-title">Team assignments</span> <span className="chip">{tasks.length} tasks</span></h2>
+          <p className="sub">Managed work, scheduling blockers and explicit worker reports.</p></div>
+        <button type="button" className="workflowButton" onClick={() => (page.value = "sessions")}><UsersThree aria-hidden="true" size={16} /> View sessions</button>
+      </div>
+      <p className="workflowHint">A grant reserves ownership; it does not prove activity. Independent approved CLI work needs no Bridge grant.</p>
+      {!all && !ledgerError && <p className="callout warn" role="status">This Bridge does not expose the assignment list. Restart into the updated Bridge; session Queue cards are not a task queue.</p>}
+      {ledgerError && <p className="callout bad" role="alert">{ledgerError}</p>}
+      {!ledgerError && all && !tasks.length && <p className="emptyCol">No assignments yet. Sessions publish requests through their outbox.</p>}
+      {sessionTasks.length > 0 && <p className="sub">Selected session is linked to {sessionTasks.length} task(s).</p>}
+      <div className="assignmentBoard">
+        {columns.map((column) => {
+          const items = tasks.filter((a) => assignmentColumn(a) === column.key);
+          return <section key={column.key} className="assignmentColumn" aria-label={`${column.label} tasks`}>
+            <h3>{column.label} <span className="chip">{items.length}</span></h3>
+            {!items.length && <p className="emptyCol">No tasks</p>}
+        {items.map((a) => (
+          <article className="assignmentItem" data-state={a.workState || "unknown"} key={a.key} aria-label={a.title || a.key}>
+            <div className="assignmentHeading">
+              <h3>{a.title || a.key}</h3>
+              <span className="chip workflowStatus" data-state={a.workState || "unknown"}>{(a.workState || a.status || "unknown").replaceAll("_", " ")}</span>
+              {a.protocol === 2 && <span className="chip">{a.points} point{a.points === 1 ? "" : "s"} · {a.mode === "self" ? "same session" : "delegated"}</span>}
+              {a.protocol !== 2 && <span className="chip">legacy handoff</span>}
+            </div>
+            <dl className="assignmentPeople">
+              <div><dt>Supervisor</dt><dd>{sessions.value.find((s) => s.sessionId === a.originId)?.title || a.originId}</dd></div>
+              <div><dt>Worker</dt><dd>{a.targetId ? (() => {
+                const worker = sessions.value.find((s) => s.sessionId === a.targetId);
+                return worker ? linkedSessionTitle(worker, tasks) : a.targetId;
+              })() : "Not created yet"}</dd></div>
+            </dl>
+            <div className="assignmentReason">
+              <b>{a.workState === "queued" ? "Why queued" : assignmentColumn(a) === "finished" ? "Outcome" : "Next action"}</b>
+              <p>{a.scheduling?.summary || (a.workState === "queued"
+                ? "The running Bridge has not exposed its scheduling reason. Queued is not proof that a worker is running."
+                : a.mode === "self" && a.workState === "running"
+                  ? "Reserved by the owning CLI, not automatically executing. Continue that existing CLI to report or safely close this assignment; do not open a duplicate worker."
+                  : a.reports.at(-1)?.summary || "Waiting for an explicit worker report.")}</p>
+              {a.scheduling?.blockingAssignmentIds.map((id) => (
+                <p key={id}>Blocking task: {tasks.find((task) => task.key === id)?.title || id}</p>
+              ))}
+            </div>
+            {a.mode === "self" && a.workState === "queued" && <p className="callout warn">
+              Legacy attended request. In its owning CLI, cancel this ungranted request and confirm cancellation before continuing directly or submitting a new managed-worker request. Do not create another self request.
+            </p>}
+            {!["queued", "running", "waiting", "blocked", "needs_human", "recovery_required", "done", "failed", "cancelled"].includes(a.workState ?? "") &&
+              <p className="callout warn">Execution state is unknown; this assignment has not been counted as running or complete.</p>}
+            <div className="assignmentLinks">
+              <button type="button" disabled={!known.has(a.originId)} onClick={() => (openSession.value = a.originId)}>Open supervisor</button>
+              <button type="button" disabled={!known.has(a.targetId)} onClick={() => (openSession.value = a.targetId)}>Open worker</button>
+            </div>
+            {!!a.dependsOn.length && <p className="sub">Depends on: {a.dependsOn.join(", ")}</p>}
+            {a.lastError && <p className="callout bad">{a.lastError}</p>}
+            <details>
+              <summary>Scope and reports ({a.reports.length})</summary>
+              <p className="assignmentId">Assignment ID: {a.key}</p>
+              {!!a.acceptance.length && <><h4>Acceptance criteria</h4><ul>{a.acceptance.map((text, i) => <li key={i}>{text}</li>)}</ul></>}
+              <p className="sub">{assignmentScope(a)}</p>
+              {!a.reports.length && <p className="sub">No explicit worker report yet.</p>}
+              <ol className="assignmentReports">{[...a.reports].reverse().map((r) => (
+                <li key={r.id}>
+                  <b>{r.kind.replaceAll("_", " ")}</b><p>{r.summary}</p>
+                  {r.verification && <p>Verification: {r.verification}</p>}
+                  {!!r.evidence.length && <p>Evidence: {r.evidence.join(", ")}</p>}
+                  {r.question && <p>Question: {r.question}</p>}
+                </li>
+              ))}</ol>
+            </details>
+          </article>
+        ))}
+          </section>;
+        })}
+      </div>
+      {!!legacy.length && <details><summary>Historical handoffs ({legacy.length})</summary>
+        <ul>{legacy.map((a) => <li key={a.key}>{a.key}: {a.status.replaceAll("_", " ")}</li>)}</ul>
+      </details>}
+      {!!receipts.length && (
+        <details className="callout bad">
+          <summary>Rejected outbox commands ({receipts.length})</summary>
+          <ul>{receipts.map((r) => <li key={`${r.sessionId}:${r.commandId}`}>{r.commandId}: {r.error || "Rejected by the Bridge"}</li>)}</ul>
+        </details>
+      )}
+    </section>
+  );
+}
 
 const COLS: { key: Column; label: string; icon: Icon }[] = [
   { key: "queue", label: "Queue", icon: ListDashes },
@@ -49,7 +184,7 @@ function Card({ s, i }: { s: Session; i: number }) {
               : s.state === "working" && <i className="dot" />} {s.stale ? "Stale" : hasIssues ? "Protocol issue" : stateLabel(s)}
           </span>
         </div>
-        <div className="taskTitle">{titleOf(s)}</div>
+        <div className="taskTitle">{linkedSessionTitle(s, snapshot.value?.assignments)}</div>
         {details && <div className="taskNote">{details}</div>}
         <div className="taskFoot">
           <AgentGlyph name={name} size="sm" />

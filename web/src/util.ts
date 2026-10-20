@@ -33,6 +33,7 @@ export const stateLabel = (s: Session) =>
 const ROLES: Record<string, string> = {
   coordinator: "orchestrator", coder: "implementation", researcher: "investigation",
   reviewer: "quality gate", "scrum-master": "coaching", unassigned: "no agent set",
+  "product-owner": "product direction",
 };
 export const roleOf = (name: string) => ROLES[name] ?? "agent";
 

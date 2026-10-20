@@ -105,7 +105,7 @@ for(const styleId of ['botanical','precinct'] as const)for(const [width,height] 
       {
         browser: browser.version(),
         durationSeconds: 30,
-        characters: 18,styleId,profile:process.env.OFFICE_GPU_PROFILE==='1'?'gpu-requested':'swiftshader',
+        characters: 19,styleId,profile:process.env.OFFICE_GPU_PROFILE==='1'?'gpu-requested':'swiftshader',
         renderedFrames:metadata.completedRenders-renderStart,renderedFps:(metadata.completedRenders-renderStart)*1000/timing.elapsedMs,idleAdditionalRenders,
         ...timing,
         ...metadata,

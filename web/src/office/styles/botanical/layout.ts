@@ -48,6 +48,13 @@ desks.push(
 );
 seats.push(
   {
+    id: "product-owner-lead",
+    position: [3.5, 0, -5],
+    approach: [3.5, 0, -4.2],
+    rotation: Math.PI,
+    reservedFor: "product-owner",
+  },
+  {
     id: "hr-lead",
     position: [10, 0, -5.8],
     approach: [10, 0, -5],

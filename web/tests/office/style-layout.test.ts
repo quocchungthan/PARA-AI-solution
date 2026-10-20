@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getOfficeStyle } from '../../src/office/styles/registry';
 import { findRoute, isWalkable, distance } from '../../src/office/routes';
+import { OFFICE_ROLES } from '../../src/office/roles';
 import type { Vec3 } from '../../src/office/types';
 
 for (const id of ['botanical', 'precinct'] as const) {
@@ -9,8 +10,8 @@ for (const id of ['botanical', 'precinct'] as const) {
     const l = getOfficeStyle(id).layout;
     assert.equal(new Set(l.seats.map(s => s.id)).size, l.seats.length);
     assert.equal(new Set(l.seats.map(s => s.position.join())).size, l.seats.length);
-    assert.equal(l.seats.filter(s => s.reservedFor).length, 7);
-    assert.equal(new Set(l.seats.filter(s => s.reservedFor).map(s => s.reservedFor)).size, 7);
+    assert.equal(l.seats.filter(s => s.reservedFor).length, OFFICE_ROLES.length);
+    assert.equal(new Set(l.seats.filter(s => s.reservedFor).map(s => s.reservedFor)).size, OFFICE_ROLES.length);
     assert.ok(l.seats.filter(s => !s.reservedFor).length >= 10);
     assert.ok(!l.seats.some(s => s.position.join() === l.human.join()));
     for (const dest of [...l.seats.map(s => s.approach), ...l.restSeats.map(s => s.approach), ...Object.values(l.leads), l.human]) {

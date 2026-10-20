@@ -1,351 +1,461 @@
+using System.Collections.Concurrent;
 using GitHub.Copilot;
 
 namespace Bridge;
 
-// Single-pass scan. Each file has exactly one writer: agents write data/sessions, the bridge writes data/inbox and data/bridge.
-public class Scanner
+// Only the scan loop writes Bridge state. Background turns persist their outcomes in the inbox.
+public partial class Scanner
 {
-    const string C = "scan";
-    readonly string _sessions, _inbox, _statePath;
+    readonly string _sessions, _inbox, _statePath, _root;
     readonly string? _model;
-    readonly CopilotClient? _client;
-    int _pass;
-    readonly List<string> _agentDirs;
-    // Every session is pinned to the PARA-AI-solution root so it is listed by `copilot --resume` there.
-    readonly string _root;
-    readonly int _maxDepth = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_DEPTH"), out var md) ? md : 3;
-    readonly int _maxHandoffs = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_HANDOFFS"), out var mh) ? mh : 5;
-    static readonly TimeSpan DailyCatchUpTimeout = TimeSpan.FromSeconds(45);
-    static readonly TimeSpan DailyScrumTimeout = TimeSpan.FromSeconds(90);
-
-    // How many delegation hops lead to this session (0 = started by a human).
-    static int DepthOf(BridgeState state, string sessionId, int guard = 0)
-    {
-        var parent = state.Delegations.FirstOrDefault(x => x.TargetId == sessionId);
-        return parent is null || guard > 20 ? 0 : 1 + DepthOf(state, parent.OriginId, guard + 1);
-    }
-
-    // Writes data/bridge/human-queue.json: everything only Chung can resolve.
-    void WriteHumanQueue(List<SessionFile> sessions)
-    {
-        var items = sessions
-            .Where(s => s.State == "needs_human" || s.Needs.Any(n => n.Resolver == "human") && s.State != "done")
-            .Select(s => new { s.SessionId, s.Agent, s.Title, s.State, s.Question, Needs = s.Needs.Where(n => n.Resolver == "human").Select(n => n.Text), s.Attempts })
-            .ToList();
-        Json.WriteAtomic(Path.Combine(Path.GetDirectoryName(_statePath)!, "human-queue.json"), items);
-        foreach (var i in items) Log.Warn("human", $"WAITING FOR CHUNG: session {i.SessionId} ({i.Agent}) \"{Log.Short(i.Title, 60)}\" question=\"{Log.Short(i.Question)}\" needs=[{Log.Short(string.Join("; ", i.Needs))}]");
-    }
+    readonly IAgentRuntime? _runtime;
+    readonly Func<DateTimeOffset> _now;
+    readonly Func<string, DateTimeOffset?> _lastActivity;
+    readonly Func<string, bool> _isLive;
+    readonly bool _trackSdkOwners;
+    readonly ConcurrentDictionary<int, byte> _sdkOwners = new();
     readonly int _dailyHour;
+    readonly int _maxDepth = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_DEPTH"), out var md) && md > 0 ? md : 3;
+    readonly int _maxHandoffs = int.TryParse(Environment.GetEnvironmentVariable("PARA_MAX_HANDOFFS"), out var mh) && mh > 0 ? mh : 5;
+    readonly ConcurrentDictionary<string, Task> _turns = new(StringComparer.OrdinalIgnoreCase);
+    int _pass;
 
-    public Scanner(string dataDir, string repoRoot, string? model, int dailyHour, CopilotClient? client)
+    public Scanner(string dataDir, string repoRoot, string? model, int dailyHour, IAgentRuntime? runtime,
+        Func<DateTimeOffset>? now = null, Func<string, DateTimeOffset?>? lastActivity = null,
+        Func<string, bool>? isLive = null)
     {
-        _agentDirs = new() { Path.Combine(repoRoot, ".github", "agents") };
         _root = repoRoot;
+        _model = model;
+        _runtime = runtime;
         _dailyHour = dailyHour;
+        _now = now ?? (() => DateTimeOffset.UtcNow);
+        _lastActivity = lastActivity ?? Inspector.LastActivity;
+        _trackSdkOwners = isLive is null;
+        _isLive = isLive ?? (id => SessionStore.LiveOwnerIds(id).Any(pid => !_sdkOwners.ContainsKey(pid)));
         _sessions = Path.Combine(dataDir, "sessions");
         _inbox = Path.Combine(dataDir, "inbox");
         _statePath = Path.Combine(dataDir, "bridge", "state.json");
-        _model = model;
-        _client = client;
         Directory.CreateDirectory(_sessions);
         Directory.CreateDirectory(_inbox);
         Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
     }
 
-    static string Now() => DateTime.UtcNow.ToString("o");
+    string Now() => _now().ToString("o");
+    string InboxPath(string id) => Path.Combine(_inbox, id + ".json");
+    static string MessageId(string kind, string key) => kind + ":" + key;
+    static bool Terminal(SessionFile s) => s.State is "done" or "waiting_input" or "blocked" or "needs_human";
+
+    SessionFile? LoadSession(string id)
+    {
+        var path = Path.Combine(_sessions, id + ".json");
+        return File.Exists(path) ? Json.Read<SessionFile>(path) : null;
+    }
+
+    InboxMessage? Message(string id, string messageId)
+    {
+        var path = InboxPath(id);
+        return File.Exists(path)
+            ? (Json.Read<InboxFile>(path) ?? throw new IOException($"Unreadable inbox: {path}")).Messages.FirstOrDefault(m => m.Id == messageId)
+            : null;
+    }
+
+    Task QueueAsync(string id, string messageId, string prompt, string from = "bridge",
+        bool createSession = false, string? agent = null, int timeoutSeconds = 1800) =>
+        InboxStore.EnqueueIfAbsentAsync(InboxPath(id), new InboxMessage
+        {
+            Id = messageId, From = from, Prompt = prompt, CreatedAt = Now(),
+            CreateSession = createSession, Agent = agent, TimeoutSeconds = timeoutSeconds,
+        });
+
+    void Save(BridgeState state) => Json.WriteAtomic(_statePath, state);
+
+    static int DepthOf(BridgeState state, string id, HashSet<string>? visited = null)
+    {
+        visited ??= new(StringComparer.OrdinalIgnoreCase);
+        if (!visited.Add(id)) return int.MaxValue / 2;
+        var parents = state.Delegations.Where(d => d.Mode != "self" && string.Equals(d.TargetId, id, StringComparison.OrdinalIgnoreCase) && d.Status != "limit_reached").ToList();
+        return parents.Count == 0 ? 0 : 1 + parents.Max(d => DepthOf(state, d.OriginId, new(visited, StringComparer.OrdinalIgnoreCase)));
+    }
+
+    static bool IsAncestor(BridgeState state, string target, string origin)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Stack<string>();
+        pending.Push(origin);
+        while (pending.TryPop(out var id))
+        {
+            if (string.Equals(id, target, StringComparison.OrdinalIgnoreCase)) return true;
+            if (!visited.Add(id)) continue;
+            foreach (var d in state.Delegations.Where(d => d.Mode != "self" && d.Status != "limit_reached" &&
+                string.Equals(d.TargetId, id, StringComparison.OrdinalIgnoreCase)))
+                pending.Push(d.OriginId);
+        }
+        return false;
+    }
 
     public async Task RunOnceAsync()
     {
-        var pass = ++_pass;
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        Log.Info(C, $"pass #{pass} start");
-
-        var state = File.Exists(_statePath) ? Json.Read<BridgeState>(_statePath) ?? new() : new BridgeState();
+        Log.Info("scan", $"pass #{++_pass} start");
+        var state = File.Exists(_statePath)
+            ? Json.Read<BridgeState>(_statePath) ?? throw new IOException($"Bridge state is unreadable; refusing to replace {_statePath}.")
+            : new BridgeState();
         var sessions = SessionStore.LoadAll(Path.GetDirectoryName(_sessions)!, _root);
-        Log.Debug(C, $"found {sessions.Count} session(s) ({sessions.Count(s => s.Discovered)} discovered without a session file) in {_sessions}");
-        foreach (var s in sessions)
-        {
-            if (s.State == "done") continue;
-            Log.Debug(C, $"session {s.SessionId} agent={s.Agent} type={s.TaskType} state={s.State}{(s.Discovered ? " UNREGISTERED" : "")} title=\"{Log.Short(s.Title, 60)}\" handoff={(s.Handoff is null ? "none" : s.Handoff.Id)}");
-        }
-
-        // Without an available agent runtime nothing can be delegated or delivered; keep surfacing the human queue.
-        if (_client is null)
-        {
-            WriteHumanQueue(sessions);
-            Log.Warn(C, $"pass #{pass} skipped delegation/inbox/daily: no agent runtime available");
-            return;
-        }
-
-        // Daily catch-up is exclusive: while it runs nothing else is processed; normal work resumes next pass.
-        if (await DailyScrumAsync(state, sessions))
-        {
-            Json.WriteAtomic(_statePath, state);
-            Log.Info(C, $"pass #{pass} was the daily catch-up ({sw.ElapsedMilliseconds}ms); normal processing resumes next pass");
-            return;
-        }
-
-        // 1. New handoff requests -> delegate to a new or existing session.
-        foreach (var s in sessions.Where(s => s.Handoff is { Prompt.Length: > 0 }))
+        await ProcessAssignmentsAsync(state, sessions);
+        foreach (var s in sessions.Where(s => !s.Discovered && s.Handoff is { Id.Length: > 0, Prompt.Length: > 0 }))
         {
             var h = s.Handoff!;
-            var key = $"{s.SessionId}:{h.Id}";
-            if (!state.SeenHandoffs.Add(key)) { Log.Debug("handoff", $"{key} already processed"); continue; }
-            Log.Info("handoff", $"NEW {key} from={s.SessionId} target={h.Target} agent={h.Agent} wantResult={h.WantResult} reason=\"{Log.Short(h.Reason)}\" prompt=\"{Log.Short(h.Prompt)}\"");
-            var d = new Delegation { Key = key, OriginId = s.SessionId, WantResult = h.WantResult, CreatedAt = Now() };
-
-            // Breakpoint: stop endless delegation chains and ping-pong; hand the problem to the human.
-            var depth = DepthOf(state, s.SessionId) + 1;
-            var count = state.Delegations.Count(x => x.OriginId == s.SessionId) + 1;
-            if (depth > _maxDepth || count > _maxHandoffs)
+            var key = s.SessionId + ":" + h.Id;
+            var existing = state.Delegations.FirstOrDefault(d => d.Key == key);
+            if (existing is not null)
             {
-                d.Status = "limit_reached";
-                state.Delegations.Add(d);
-                var why = depth > _maxDepth ? $"delegation depth {depth} exceeds {_maxDepth}" : $"{count} handoffs from this session exceeds {_maxHandoffs}";
-                Log.Warn("breakpoint", $"{key} NOT delegated: {why}. Telling origin to escalate to a human.");
-                try { await FeedAsync(s.SessionId, $"BREAKPOINT: your handoff {h.Id} was refused by the bridge ({why}). Do not delegate further. Set state to needs_human, list what only Chung can resolve in needs (resolver: human), state your single question, and stop.", "bridge"); }
-                catch (Exception e) { Log.Error("breakpoint", $"{key} could not notify origin", e); }
+                existing.Prompt ??= h.Prompt;
+                existing.Agent ??= h.Agent;
+                existing.CreateSession ??= string.Equals(h.Target, "new", StringComparison.OrdinalIgnoreCase);
                 continue;
             }
-            try
+            // Historical completed sessions may retain old handoffs; do not restart their work.
+            if (s.State == "done" || s.State == "needs_human" || s.Needs.Any(n => n.Resolver == "human")) continue;
+            if (state.SeenHandoffs.Contains(key))
             {
-                var prompt = $"Delegated by session {s.SessionId} ({s.Title}). Reason: {h.Reason}\n\n{h.Prompt}\n\nFollow the para-session-protocol skill and record progress in your own data/sessions file.";
-                if (h.Target.Equals("new", StringComparison.OrdinalIgnoreCase))
-                {
-                    d.TargetId = Guid.NewGuid().ToString();
-                    Log.Info("handoff", $"{key} creating NEW session {d.TargetId} agent={h.Agent ?? "(default)"} model={_model ?? "(default)"}");
-                    // Not `await using`: the background turn owns the session and disposes it when finished.
-                    var session = await _client!.CreateSessionAsync(new SessionConfig
-                    {
-                        SessionId = d.TargetId,
-                        WorkingDirectory = _root,
-                        Model = _model,
-                        AgentDirectories = _agentDirs,
-                        Agent = h.Agent,
-                        OnPermissionRequest = PermissionHandler.ApproveAll,
-                    });
-                    try
-                    {
-                        Attach(session, d.TargetId);
-                        prompt += $"\nYour session id is {d.TargetId}.";
-                        // Fire and forget: the result comes back through the target's session file (step 2), not this turn.
-                        StartBackgroundTurn(session, d.TargetId, key, prompt);
-                    }
-                    catch { await session.DisposeAsync(); throw; }
-                }
-                else
-                {
-                    d.TargetId = h.Target;
-                    Log.Info("handoff", $"{key} feeding EXISTING session {d.TargetId}");
-                    await FeedAsync(d.TargetId, prompt);
-                }
-                Log.Info("handoff", $"{key} assigned -> {d.TargetId}");
+                Log.Warn("handoff", $"{key} has no delegation record; refusing to replay previously seen work");
+                continue;
             }
-            catch (Exception e) { d.Status = "failed"; Log.Error("handoff", $"{key} FAILED", e); }
+            var create = string.Equals(h.Target, "new", StringComparison.OrdinalIgnoreCase);
+            var d = new Delegation
+            {
+                Key = key, OriginId = s.SessionId, TargetId = create ? Guid.NewGuid().ToString() : h.Target,
+                WantResult = h.WantResult, Agent = h.Agent, CreateSession = create,
+                Prompt = h.Prompt, CreatedAt = Now(), Status = "pending",
+            };
+            var limit = DepthOf(state, s.SessionId) >= _maxDepth ||
+                state.Delegations.Count(x => x.Protocol != 2 && x.OriginId == s.SessionId) >= _maxHandoffs ||
+                !Guid.TryParse(d.TargetId, out _) || IsAncestor(state, d.TargetId, s.SessionId);
+            if (limit)
+            {
+                d.Status = "limit_reached";
+                d.LastError = "Invalid target, delegation cycle, depth or handoff limit reached.";
+            }
+            state.SeenHandoffs.Add(key);
             state.Delegations.Add(d);
+            Save(state); // Persist identity and original prompt before any runtime side effect.
         }
 
-        // 1b. After a Bridge restart, delegated turns were killed with it; resume them once so they are not stuck.
-        if (pass == 1)
-            foreach (var d in state.Delegations.Where(d => d.Status == "assigned" && !_busy.ContainsKey(d.TargetId)))
+        foreach (var d in state.Delegations.Where(d => d.Protocol != 2))
+        {
+            if (d.Status is "failed" or "limit_reached")
             {
-                var path = Path.Combine(_sessions, d.TargetId + ".json");
-                var target = File.Exists(path) ? Json.Read<SessionFile>(path) : null;
-                if (target is not null && target.State != "working") continue;
-                Log.Warn("recover", $"{d.Key}: target {d.TargetId} was interrupted by a Bridge restart; resuming it");
-                try { StartBackgroundResume(d.TargetId, d.Key); }
-                catch (Exception e) { Log.Error("recover", $"{d.Key} could not resume {d.TargetId}", e); }
+                if (LoadSession(d.OriginId)?.State != "done")
+                    await QueueAsync(d.OriginId, MessageId("failure", d.Key),
+                        $"BREAKPOINT: delegation {d.Key} cannot continue: {d.LastError}. Do not repeat the handoff. Set needs_human with the error and one precise question, and stop.");
+                continue;
             }
-
-        // 2. Finished delegated work -> feed the result back to the origin session.
-        var open = state.Delegations.Where(d => d.Status == "assigned" && d.WantResult).ToList();
-        Log.Debug("result", $"{open.Count} open delegation(s) awaiting result");
-        foreach (var d in open)
-        {
-            var path = Path.Combine(_sessions, d.TargetId + ".json");
-            var target = File.Exists(path) ? Json.Read<SessionFile>(path) : null;
-            if (target is null) { Log.Debug("result", $"{d.Key}: target {d.TargetId} has no session file yet (agent has not registered)"); continue; }
-            if (target.State is not ("done" or "waiting_input" or "blocked" or "needs_human")) { Log.Debug("result", $"{d.Key}: target {d.TargetId} state={target.State}, still running"); continue; }
-            if (_busy.ContainsKey(d.OriginId)) { Log.Debug("result", $"{d.Key}: origin {d.OriginId} is mid-turn, will feed next pass"); continue; }
-            var msg = $"Result of delegation to session {d.TargetId} (state: {target.State}).\nResult: {target.Result}\nQuestion: {target.Question}\nNeeds: {string.Join("; ", target.Needs.Select(n => $"[{n.Resolver}] {n.Text}"))}";
-            Log.Info("result", $"{d.Key}: target {d.TargetId} state={target.State}; feeding back to origin {d.OriginId}");
-            try { await FeedAsync(d.OriginId, msg); d.Status = "result_fed"; Log.Info("result", $"{d.Key} result_fed"); }
-            catch (Exception e) { Log.Error("result", $"{d.Key} feed-back failed (will retry next pass)", e); }
-        }
-
-        // 3. Pending inbox messages (user/bridge input) -> resume the session and send.
-        foreach (var file in Directory.GetFiles(_inbox, "*.json"))
-        {
-            var inbox = Json.Read<InboxFile>(file);
-            if (inbox is null) continue;
-            var id = Path.GetFileNameWithoutExtension(file);
-            var pending = inbox.Messages.Where(m => m.Status == "pending").ToList();
-            Log.Debug("inbox", $"{id}: {inbox.Messages.Count} message(s), {pending.Count} pending");
-            foreach (var m in pending)
+            if (d.Status == "result_fed") continue;
+            // A delivered result is authoritative even if the target has since started other work.
+            var forwarded = Message(d.OriginId, MessageId("result", d.Key));
+            if (forwarded?.Status == "delivered") { d.Status = "result_fed"; continue; }
+            if (forwarded?.Status == "failed") { Fail(d, $"Result delivery failed: {forwarded.LastError}"); continue; }
+            if (forwarded is not null) continue;
+            var initialId = MessageId("handoff", d.Key);
+            var initial = Message(d.TargetId, initialId);
+            d.Attempts = initial?.Attempts ?? d.Attempts;
+            if (d.RecoveryAttempts == 0) d.NextAttemptAt = initial?.NextAttemptAt;
+            d.LastError = initial?.LastError ?? d.LastError;
+            if (initial is { Status: "failed", Attempts: >= RetryPolicy.MaxAttempts })
             {
-                Log.Info("inbox", $"{id}: delivering {m.Id} from={m.From} prompt=\"{Log.Short(m.Prompt)}\"");
-                try { m.Response = await ResumeAndSendAsync(id, m.Prompt); m.Status = "delivered"; Log.Info("inbox", $"{id}: {m.Id} delivered"); }
-                catch (Exception e) { m.Status = "failed"; m.Response = e.Message; Log.Error("inbox", $"{id}: {m.Id} FAILED", e); }
-                m.DeliveredAt = Now();
-                await InboxStore.UpdateMessageAsync(file, m);
+                Fail(d, initial.LastError ?? "Initial delivery exhausted retry budget.");
+                continue;
             }
-        }
-
-        Json.WriteAtomic(_statePath, state);
-        WriteHumanQueue(sessions);
-
-        var stale = sessions.Where(s => SessionHealth.IsStale(s)).ToList();
-        foreach (var s in stale)
-            Log.Warn("stale", $"session {s.SessionId} state=working has not updated since \"{s.UpdatedAt ?? "(missing)"}\"; agent owns its session file, so Bridge did not change its state");
-        var invalid = sessions.Select(s => (Session: s, Issues: SessionHealth.Issues(s))).Where(x => x.Issues.Count > 0).ToList();
-        foreach (var item in invalid)
-            Log.Warn("session", $"session {item.Session.SessionId} has protocol issue(s): {string.Join("; ", item.Issues)}");
-        var attention = sessions.Where(s => s.State is "waiting_input" or "pending" or "blocked").ToList();
-        foreach (var s in attention)
-            Log.Warn("attention", $"session {s.SessionId} state={s.State} question=\"{Log.Short(s.Question)}\" needs=[{Log.Short(string.Join("; ", s.Needs.Select(n => n.Text)))}]");
-        var attentionCount = sessions.Count(s => s.State is "waiting_input" or "pending" or "blocked" ||
-            SessionHealth.IsStale(s) || SessionHealth.Issues(s).Count > 0);
-        Log.Info(C, $"pass #{pass} done in {sw.ElapsedMilliseconds}ms: sessions={sessions.Count} attention={attentionCount} stale={stale.Count} invalid={invalid.Count} openDelegations={state.Delegations.Count(d => d.Status == "assigned")} failedDelegations={state.Delegations.Count(d => d.Status == "failed")}");
-    }
-
-    // Once per local day after PARA_DAILY_HOUR: catch up with every open session one by one, then run the scrum master. Returns true if it ran.
-    async Task<bool> DailyScrumAsync(BridgeState state, List<SessionFile> sessions)
-    {
-        var today = DateTime.Now.ToString("yyyy-MM-dd");
-        if (state.LastDailyRun == today) { Log.Debug("daily", $"already ran today ({today})"); return false; }
-        if (DateTime.Now.Hour < _dailyHour) { Log.Debug("daily", $"waiting for hour {_dailyHour}"); return false; }
-
-        // Mark first so a crash or long run cannot trigger it again the same day.
-        state.LastDailyRun = today;
-        Json.WriteAtomic(_statePath, state);
-        Log.Info("daily", $"starting daily catch-up for {today}");
-
-        var stale = sessions.Where(s => SessionHealth.IsStale(s)).ToList();
-        var invalid = sessions.Where(s => SessionHealth.Issues(s).Count > 0).ToList();
-        var open = sessions.Where(s => s.State == "working" && !SessionHealth.IsStale(s) &&
-            SessionHealth.Issues(s).Count == 0 && !string.Equals(s.Agent, "scrum-master", StringComparison.OrdinalIgnoreCase)).ToList();
-        Log.Info("daily", $"catch-up candidates={open.Count} staleWorking={stale.Count} (stale threshold {SessionHealth.StaleAfter.TotalMinutes:0}m)");
-        await Task.WhenAll(open.Select(async s =>
-        {
-            Log.Info("daily", $"catch-up with {s.SessionId} (state={s.State}) ...");
-            try
+            if (d.Status == "pending" || d.Status == "starting" && initial is not { Status: "delivered" })
             {
-                await FeedAsync(s.SessionId, $"Daily catch-up ({today}). Reply briefly: what you did since last time, current state, anything blocking you or needed from others. Refresh your data/sessions file too.", "scrum-master", DailyCatchUpTimeout);
-                Log.Info("daily", $"catch-up with {s.SessionId} done");
-            }
-            catch (Exception e) { Log.Error("daily", $"catch-up with {s.SessionId} failed or timed out (continuing)", e); }
-        }));
-
-        try
-        {
-            var staleSummary = stale.Count == 0
-                ? "No stale working sessions were detected."
-                : $"Stale working sessions (do not resume them): {string.Join("; ", stale.Select(s => $"{s.SessionId} \"{Log.Short(s.Title, 60)}\" updatedAt={s.UpdatedAt ?? "(missing)"}"))}.";
-            var invalidSummary = invalid.Count == 0
-                ? "No session protocol issues were detected."
-                : $"Sessions with protocol issues (do not resume them): {string.Join("; ", invalid.Select(x => $"{x.SessionId}: {string.Join(", ", SessionHealth.Issues(x))}"))}.";
-            var prompt = $"Daily scrum for {today}. Review the team per your instructions. {open.Count} active session(s) were asked for a catch-up; their replies are in data/inbox/<id>.json (response) and their session files. {staleSummary} {invalidSummary} Intervene and improve as needed. Reply with a short health summary.";
-            var existingScrumMaster = sessions.FirstOrDefault(s => s.SessionId == state.ScrumMasterId);
-            if (state.ScrumMasterId is null || existingScrumMaster is null || SessionHealth.IsStale(existingScrumMaster))
-            {
-                if (state.ScrumMasterId is not null)
-                    Log.Warn("daily", $"scrum-master session {state.ScrumMasterId} is missing or stale; creating a fresh session");
-                var id = Guid.NewGuid().ToString();
-                Log.Info("daily", $"creating scrum-master session {id}");
-                await using var session = await _client!.CreateSessionAsync(new SessionConfig
+                if (d.Status == "pending" && state.Delegations.Any(x =>
+                    AssignmentPolicy.Holds(x) && !AssignmentPolicy.Suspended(x, state, _turns.ContainsKey)))
+                    continue; // Unknown legacy write scope is repository-exclusive.
+                if (string.IsNullOrWhiteSpace(d.Prompt) || d.CreateSession is null)
                 {
-                    SessionId = id,
-                    WorkingDirectory = _root,
-                    Model = _model,
-                    AgentDirectories = _agentDirs,
-                    Agent = "scrum-master",
-                    OnPermissionRequest = PermissionHandler.ApproveAll,
-                });
-                state.ScrumMasterId = id;
-                Json.WriteAtomic(_statePath, state);
-                Attach(session, id);
-                var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt + $" Your session id is {id}." }, DailyScrumTimeout);
-                Log.Info("daily", $"scrum master summary: \"{Log.Short((reply?.Data as AssistantMessageData)?.Content, 400)}\"");
+                    Fail(d, "Original handoff is unavailable; cannot safely reconstruct this work.");
+                    continue;
+                }
+                await QueueAsync(d.TargetId, initialId, DelegationPrompt(d), d.OriginId, d.CreateSession.Value, d.Agent);
+                d.Status = "starting";
+                continue;
             }
-            else
+            d.Status = "assigned";
+            if (initial is not null && initial.Status != "delivered") continue;
+            var target = LoadSession(d.TargetId);
+            if (_turns.ContainsKey(d.TargetId)) continue;
+            // A child supervisor waiting on v2 children is not a completed legacy result.
+            if (state.Delegations.Any(child => child.Protocol == 2 && child.OriginId == d.TargetId &&
+                !AssignmentPolicy.Closed(child))) continue;
+            var refreshed = initial is null || DateTimeOffset.TryParse(target?.UpdatedAt, out var updated) &&
+                DateTimeOffset.TryParse(initial.LastAttemptAt, out var sent) && updated >= sent;
+            if (target is not null && Terminal(target) && refreshed)
             {
-                Log.Info("daily", $"resuming scrum-master session {state.ScrumMasterId}");
-                Log.Info("daily", $"scrum master summary: \"{Log.Short(await ResumeAndSendAsync(state.ScrumMasterId, prompt, DailyScrumTimeout), 400)}\"");
+                if (SessionHealth.Issues(target).Count > 0)
+                {
+                    await RecoverAsync(d, "Your session file violates the protocol; repair it before reporting a result.");
+                    continue;
+                }
+                if (!d.WantResult) { d.Status = "result_fed"; continue; }
+                var resultId = MessageId("result", d.Key);
+                await QueueAsync(d.OriginId, resultId,
+                    $"Result of delegation to session {d.TargetId} (state: {target.State}).\nResult: {target.Result}\nQuestion: {target.Question}\nNeeds: {string.Join("; ", target.Needs.Select(n => $"[{n.Resolver}] {n.Text}"))}");
+                var result = Message(d.OriginId, resultId)!;
+                if (result.Status == "delivered") d.Status = "result_fed";
+                else if (result.Status == "failed")
+                {
+                    Fail(d, $"Result delivery failed: {result.LastError}");
+                }
+                continue;
             }
+            var activity = _lastActivity(d.TargetId);
+            if (activity is { } at && _now() - at < Inspector.SilentAfter) continue;
+            if (_runtime is not null)
+                await RecoverAsync(d, "Re-read your session file and continue interrupted work. Check completed side effects before doing anything again.");
         }
-        catch (Exception e) { Log.Error("daily", "scrum master run failed or timed out", e); }
-        return true;
+        Save(state);
+        await DailyScrumAsync(state, sessions);
+        Save(state);
+        WriteHumanQueue(sessions, state);
+        if (_runtime is not null)
+            await DispatchAsync(state);
+        else
+            Log.Warn("scan", "No Copilot runtime; queued work is retained without consuming retry attempts.");
+        Log.Info("scan", $"pass #{_pass} done: sessions={sessions.Count} turns={_turns.Count} failedDelegations={state.Delegations.Count(d => d.Status == "failed")} {AssignmentScanSummary(state)}");
     }
 
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _busy = new();
-
-    void StartBackgroundTurn(CopilotSession session, string id, string key, string prompt)
+    public static string AssignmentScanSummary(BridgeState state)
     {
-        _busy[id] = 0;
-        _ = Task.Run(async () =>
+        var rows = state.Delegations.Where(d => d.Protocol == 2).ToList();
+        return string.Join(" ", new[] { "queued", "running", "waiting", "blocked", "needs_human", "recovery_required", "done", "failed", "cancelled" }
+            .Select(workState => $"v2_{workState}={rows.Count(d => d.WorkState == workState)}"));
+    }
+
+    string DelegationPrompt(Delegation d) =>
+        $"Delegation {d.Key} from session {d.OriginId}.\n\n{d.Prompt}\n\nYour session id is {d.TargetId}. Follow para-session-protocol and write only your own session file.";
+
+    void Fail(Delegation d, string error)
+    {
+        d.Status = "failed";
+        d.LastError = error;
+        d.NextAttemptAt = null;
+        Log.Error("recover", $"{d.Key}: {error}");
+    }
+
+    async Task RecoverAsync(Delegation d, string instructions)
+    {
+        if (_runtime is null) return;
+        if (d.RecoveryAttempts > 0)
         {
-            try
+            var previous = Message(d.TargetId, MessageId("recovery", d.Key + ":" + d.RecoveryAttempts));
+            if (previous is not null && previous.Status != "delivered" && previous.Status != "failed")
             {
-                var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, TimeSpan.FromMinutes(30));
-                Log.Info("handoff", $"{key} session {id} turn finished, reply=\"{Log.Short((reply?.Data as AssistantMessageData)?.Content)}\"");
+                d.NextAttemptAt = previous.NextAttemptAt;
+                d.LastError = previous.LastError;
+                return;
             }
-            catch (Exception e) { Log.Error("handoff", $"{key} session {id} turn failed", e); }
-            finally { _busy.TryRemove(id, out _); await session.DisposeAsync(); }
-        });
-    }
-
-    void StartBackgroundResume(string id, string key)
-    {
-        _busy[id] = 0;
-        _ = Task.Run(async () =>
+            if (previous?.Status == "failed")
+            {
+                Fail(d, $"Recovery delivery exhausted retries: {previous.LastError}");
+                return;
+            }
+            if (!RetryPolicy.IsDue(d.NextAttemptAt, _now())) return;
+        }
+        if (d.RecoveryAttempts >= 3 || d.CreateSession is null || string.IsNullOrWhiteSpace(d.Prompt))
         {
-            try
-            {
-                var reply = await ResumeAndSendAsync(id, "The PARA bridge restarted and interrupted your previous turn. Re-read your data/sessions file, check what is already done, and continue the task. Permission requests are auto-approved by the bridge. If something fails, follow the 'Failure, retry and ask for help' section of the para-session-protocol skill.");
-                Log.Info("recover", $"{key} session {id} resumed turn finished, reply=\"{Log.Short(reply)}\"");
-            }
-            catch (Exception e) { Log.Error("recover", $"{key} session {id} resumed turn failed", e); }
-            finally { _busy.TryRemove(id, out _); }
-        });
+            Fail(d, "Recovery exhausted or original prompt missing; human intervention is required.");
+            return;
+        }
+        d.RecoveryAttempts++;
+        d.NextAttemptAt = _now().AddMinutes(10).ToString("o");
+        await QueueAsync(d.TargetId, MessageId("recovery", d.Key + ":" + d.RecoveryAttempts),
+            instructions + "\n\nOriginal assignment:\n" + DelegationPrompt(d), createSession: d.CreateSession.Value, agent: d.Agent);
+        Log.Warn("recover", $"{d.Key}: queued recovery {d.RecoveryAttempts}/3");
     }
 
-    // Queue via the inbox file so there is a record, then deliver on this same pass.
-    async Task FeedAsync(string sessionId, string prompt, string from = "bridge", TimeSpan? timeout = null)
+    async Task DailyScrumAsync(BridgeState state, List<SessionFile> sessions)
     {
-        var path = Path.Combine(_inbox, sessionId + ".json");
-        var m = new InboxMessage { From = from, Prompt = prompt, CreatedAt = Now() };
-        await InboxStore.EnqueueAsync(path, m);
+        var today = _now().ToLocalTime().ToString("yyyy-MM-dd");
+        if (state.LastDailyRun == today || _now().ToLocalTime().Hour < _dailyHour) return;
+        if (state.DailyRunDate != today)
+        {
+            state.DailyRunDate = today;
+            state.DailyCatchUpSessionIds = sessions.Where(s => s.State == "working" &&
+                !SessionHealth.IsStale(s, _now()) && SessionHealth.Issues(s).Count == 0 && s.Agent != "scrum-master" &&
+                !state.Delegations.Any(d => d.Protocol == 2 && d.TargetId == s.SessionId &&
+                    d.WorkState is "waiting" or "blocked" or "needs_human" or "recovery_required"))
+                .Select(s => s.SessionId).ToList();
+            Save(state);
+        }
+        foreach (var id in state.DailyCatchUpSessionIds)
+            await QueueAsync(id, MessageId("daily", today), $"Daily catch-up ({today}): briefly report work, state, and blockers; refresh your session file.",
+                "scrum-master", timeoutSeconds: 45);
+        if (state.DailyCatchUpSessionIds.Any(id => Message(id, MessageId("daily", today))?.Status is not ("delivered" or "failed"))) return;
+        state.ScrumMasterId ??= Guid.NewGuid().ToString();
+        Save(state);
+        var scrumId = MessageId("scrum", today);
+        await QueueAsync(state.ScrumMasterId, scrumId,
+            $"Daily scrum ({today}): follow your scrum-master instructions. Review data/sessions, inbox, bridge/state.json and bridge.log; surface failures and human needs. Do not resume stale sessions. Your session id is {state.ScrumMasterId}.",
+            createSession: true, agent: "scrum-master", timeoutSeconds: 90);
+        if (Message(state.ScrumMasterId, scrumId)?.Status == "delivered")
+            state.LastDailyRun = today;
+    }
+
+    async Task DispatchAsync(BridgeState state)
+    {
+        foreach (var path in Directory.GetFiles(_inbox, "*.json"))
+        {
+            var id = Path.GetFileNameWithoutExtension(path);
+            if (_turns.ContainsKey(id)) continue;
+            var inbox = Json.Read<InboxFile>(path);
+            if (inbox is null) continue;
+            var session = LoadSession(id);
+            // _turns above is authoritative for this Bridge's actively executing SDK turns.
+            // A process lock alone denotes an owner, not necessarily an executing turn.
+            // Never open a second SDK host into an attended terminal session.
+            if (_isLive(id)) continue;
+            var needsHuman = AssignmentPolicy.Human(session) || state.Delegations.Any(d =>
+                d.Protocol == 2 && d.TargetId == id && d.WorkState is "needs_human" or "recovery_required");
+            // Preserve order within a session; independent sessions run concurrently.
+            // Human decisions must not be trapped behind automated messages paused by that decision.
+            var m = inbox.Messages.FirstOrDefault(m => m.Status != "delivered" &&
+                (!needsHuman || m.From == "user") &&
+                AssignmentDispatchAllowed(state, id, m, session) &&
+                !(m.Status == "failed" && m.Attempts >= RetryPolicy.MaxAttempts));
+            if (m is null || !RetryPolicy.IsDue(m.NextAttemptAt, _now())) continue;
+            if (m.Attempts >= RetryPolicy.MaxAttempts)
+            {
+                m.Status = "failed";
+                m.LastError ??= "Delivery interrupted at the retry limit; outcome is uncertain.";
+                m.NextAttemptAt = null;
+                await InboxStore.UpdateMessageAsync(path, m);
+                continue;
+            }
+            if (session?.State == "working" && _lastActivity(id) is { } active && _now() - active < Inspector.SilentAfter)
+                continue;
+            m.Attempts++;
+            m.LastAttemptAt = Now();
+            m.Status = "delivering";
+            m.LastError = null;
+            m.NextAttemptAt = _now().AddSeconds(Math.Max(1, m.TimeoutSeconds) + 60).ToString("o");
+            await InboxStore.UpdateMessageAsync(path, m);
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!_turns.TryAdd(id, completion.Task)) throw new InvalidOperationException($"Session {id} already has a delivery.");
+            _ = DeliverAsync(path, id, m, completion);
+        }
+    }
+
+    async Task DeliverAsync(string path, string id, InboxMessage m, TaskCompletionSource completion)
+    {
         try
         {
-            m.Response = await ResumeAndSendAsync(sessionId, prompt, timeout);
-            m.Status = "delivered";
+            try
+            {
+                await using var session = await OpenAsync(id, m);
+                // A lock identifies a process owner, not an active turn. Remember the SDK
+                // server's observed PIDs so its own idle locks don't look like an attended
+                // CLI. A different PID (or an orphan across restart) remains conservative.
+                if (_trackSdkOwners)
+                    foreach (var pid in SessionStore.LiveOwnerIds(id).Where(pid => pid > 0))
+                        _sdkOwners.TryAdd(pid, 0);
+                var prompt = $"Bridge message {m.Id}, attempt {m.Attempts}/{RetryPolicy.MaxAttempts}. This may be a redelivery; do not repeat completed side effects.\n\n{m.Prompt}";
+                try
+                {
+                    m.Response = await session.SendAsync(prompt, TimeSpan.FromSeconds(Math.Max(1, m.TimeoutSeconds)));
+                }
+                finally
+                {
+                    // Some SDK servers acquire the session lock only when sending starts.
+                    if (_trackSdkOwners)
+                        foreach (var pid in SessionStore.LiveOwnerIds(id).Where(pid => pid > 0))
+                            _sdkOwners.TryAdd(pid, 0);
+                }
+                m.Status = "delivered";
+                m.DeliveredAt = Now();
+                m.NextAttemptAt = null;
+                Log.Info("inbox", $"{id}: {m.Id} delivered");
+            }
+            catch (Exception e)
+            {
+                m.LastError = e.Message;
+                m.Status = m.Attempts >= RetryPolicy.MaxAttempts ? "failed" : "pending";
+                m.NextAttemptAt = m.Status == "failed" ? null : RetryPolicy.NextAttempt(m.Attempts, _now()).ToString("o");
+                Log.Error("inbox", $"{id}: {m.Id} attempt {m.Attempts}/{RetryPolicy.MaxAttempts} {m.Status}", e);
+            }
+            await InboxStore.UpdateMessageAsync(path, m);
         }
-        catch { m.Status = "failed"; throw; }
-        finally { m.DeliveredAt = Now(); await InboxStore.UpdateMessageAsync(path, m); }
+        catch (Exception e)
+        {
+            Log.Error("inbox", $"Could not persist delivery outcome for {id}/{m.Id}; retained claim will be recovered.", e);
+        }
+        finally
+        {
+            _turns.TryRemove(id, out _);
+            completion.SetResult();
+        }
     }
 
-    async Task<string?> ResumeAndSendAsync(string sessionId, string prompt, TimeSpan? timeout = null)
+    async Task<IAgentSession> OpenAsync(string id, InboxMessage m)
     {
-        Log.Info("sdk", $"resuming session {sessionId}");
-        await using var session = await _client!.ResumeSessionAsync(sessionId, new ResumeSessionConfig
+        try
         {
-            WorkingDirectory = _root,
-            AgentDirectories = _agentDirs,
-            OnPermissionRequest = PermissionHandler.ApproveAll,
-        });
-        Attach(session, sessionId);
-        Log.Info("sdk", $"sending to {sessionId}: \"{Log.Short(prompt)}\"");
-        var reply = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, timeout ?? TimeSpan.FromMinutes(30));
-        var content = (reply?.Data as AssistantMessageData)?.Content;
-        Log.Info("sdk", $"{sessionId} replied: \"{Log.Short(content)}\"");
-        return content;
+            return await _runtime!.ResumeAsync(id, new ResumeSessionConfig
+            {
+                WorkingDirectory = _root, AgentDirectories = new List<string> { Path.Combine(_root, ".github", "agents") },
+                OnPermissionRequest = PermissionHandler.ApproveAll,
+            });
+        }
+        catch (Exception e) when (m.CreateSession && e.Message.Contains("Session not found", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warn("recover", $"Session {id} does not exist; creating it from its persisted prompt.");
+            return await _runtime!.CreateAsync(new SessionConfig
+            {
+                SessionId = id, WorkingDirectory = _root, Model = _model,
+                AgentDirectories = new List<string> { Path.Combine(_root, ".github", "agents") }, Agent = m.Agent,
+                OnPermissionRequest = PermissionHandler.ApproveAll,
+            });
+        }
     }
 
-    // Trace every SDK event so a stuck or failing session is visible.
-    static void Attach(CopilotSession session, string id) =>
-        session.On<SessionEvent>(evt =>
-        {
-            if (evt is AssistantMessageEvent) return;
-            Log.Debug("sdk-event", $"{id} {evt.GetType().Name}");
-        });
+    public async Task WaitForIdleAsync()
+    {
+        while (!_turns.IsEmpty) await Task.WhenAll(_turns.Values);
+    }
+
+    void WriteHumanQueue(List<SessionFile> sessions, BridgeState state)
+    {
+        var items = sessions.Where(s => s.State != "done" && (s.State == "needs_human" || s.Needs.Any(n => n.Resolver == "human")))
+            .Select(s => new { s.SessionId, s.Agent, s.Title, s.State, s.Question,
+                Needs = s.Needs.Where(n => n.Resolver == "human").Select(n => n.Text).ToList(), s.Attempts }).ToList();
+        foreach (var d in state.Delegations.Where(d => d.Protocol != 2 && d.Status is "failed" or "limit_reached"))
+            items.Add(new
+            {
+                SessionId = d.OriginId, Agent = (string?)"bridge", Title = (string?)"Delegation requires attention",
+                State = "needs_human", Question = (string?)$"Resolve delegation {d.Key}: {d.LastError}",
+                Needs = new List<string> { d.LastError ?? "Unknown delegation failure" }, Attempts = d.Attempts + d.RecoveryAttempts,
+            });
+        foreach (var d in state.Delegations.Where(d => d.Protocol == 2 && d.WorkState is "needs_human" or "recovery_required"))
+            items.Add(new
+            {
+                SessionId = d.OriginId, Agent = (string?)"bridge", Title = d.Title,
+                State = "needs_human", Question = (string?)(d.Reports.LastOrDefault()?.Question ?? d.LastError ?? $"Resolve assignment {d.Key}"),
+                Needs = new List<string> { d.LastError ?? d.Reports.LastOrDefault()?.Summary ?? "Assignment requires human input" },
+                Attempts = d.Attempts + d.RecoveryAttempts,
+            });
+        foreach (var receipt in state.OutboxReceipts.Where(r => r.Error is not null))
+            items.Add(new
+            {
+                SessionId = receipt.SessionId, Agent = (string?)"bridge", Title = (string?)"Outbox command diagnostic",
+                State = "needs_human", Question = (string?)$"Command {receipt.CommandId}: {receipt.Error}",
+                Needs = new List<string> { receipt.Error! }, Attempts = 0,
+            });
+        foreach (var path in Directory.GetFiles(_inbox, "*.json"))
+            foreach (var m in Json.Read<InboxFile>(path)?.Messages.Where(m => m.Status == "failed") ?? [])
+                items.Add(new
+                {
+                    SessionId = Path.GetFileNameWithoutExtension(path), Agent = (string?)"bridge", Title = (string?)"Message delivery requires attention",
+                    State = "needs_human", Question = (string?)$"Resolve message {m.Id}: {m.LastError}",
+                    Needs = new List<string> { m.LastError ?? "Unknown delivery failure" }, Attempts = m.Attempts,
+                });
+        Json.WriteAtomic(Path.Combine(Path.GetDirectoryName(_statePath)!, "human-queue.json"), items);
+    }
 }

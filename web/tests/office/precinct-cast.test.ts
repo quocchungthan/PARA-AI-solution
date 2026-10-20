@@ -24,3 +24,9 @@ test('supporting cast is deterministic and articulated rigs keep finite parts in
     for(const v of part.voxels)assert.ok([...v.position,...v.size].every(Number.isFinite));
   }
 });
+
+test('current-main Product Owner has a renderable precinct representative',()=>{
+  const a=precinctAppearance('lead','product-owner','lead-product-owner');
+  assert.ok(a,'Product Owner appearance must exist');
+  assert.ok(buildPrecinctCharacter(a,'seated').every(p=>p.voxels.every(v=>[...v.position,...v.size].every(Number.isFinite))));
+});

@@ -12,6 +12,7 @@ const cast={
   'scrum-master':appearance('Terry','#936443','#382e26','#ad6953','bald',{suspenders:true,build:'broad'}),
   hr:appearance('Gina','#d7ab85','#77523a','#34353d','curly'),
   researcher:appearance('Kevin','#d5b28e','#77654d','#8c8170','short',{glasses:true,tie:true}),
+  'product-owner':appearance('Karen','#ac795b','#322a28','#9a6276','curly'),
 };
 const supporting=[appearance('Scully','#deb78d','#8a7b65','#607e98','short',{build:'broad',tie:true}),
   appearance('Hitchcock','#ddb18d','#816b51','#d3c2a5','bald',{build:'broad'}),
