@@ -7,6 +7,16 @@ namespace Bridge.Tests;
 public class AssignmentContractTests
 {
     [Fact]
+    public void SessionResultAcceptsStructuredJsonWithoutRejectingTheSession()
+    {
+        const string json = """{"sessionId":"session","state":"done","result":{"summary":"completed","items":[1,2]}}""";
+
+        var session = JsonSerializer.Deserialize<SessionFile>(json, Json.Options)!;
+
+        Assert.Equal("""{"summary":"completed","items":[1,2]}""", session.Result);
+    }
+
+    [Fact]
     public void FrozenContractRoundTripsAndLegacyDoesNotRequireEstimate()
     {
         var session = new SessionFile

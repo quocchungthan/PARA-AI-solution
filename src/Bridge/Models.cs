@@ -39,11 +39,29 @@ public class SessionFile
         get => _progress;
         set => _progress = value?.Where(p => p is not null).ToList() ?? new();
     }
+    [JsonConverter(typeof(SessionResultConverter))]
     public string? Result { get; set; }                // final output the bridge can feed back to a requester
     public Handoff? Handoff { get; set; }
     public string? UpdatedAt { get; set; }
     // True when the Bridge found this session in Copilot's session-state instead of a data/sessions file.
     [JsonIgnore] public bool Discovered { get; set; }
+}
+
+public sealed class SessionResultConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String) return reader.GetString();
+        if (reader.TokenType == JsonTokenType.Null) return null;
+        using var value = JsonDocument.ParseValue(ref reader);
+        return value.RootElement.GetRawText();
+    }
+
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
+    {
+        if (value is null) writer.WriteNullValue();
+        else writer.WriteStringValue(value);
+    }
 }
 
 public static class SessionHealth

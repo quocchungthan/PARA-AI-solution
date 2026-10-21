@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using GitHub.Copilot;
+using GitHub.Copilot.Rpc;
 
 namespace Bridge;
 
@@ -44,6 +45,14 @@ public partial class Scanner
     string InboxPath(string id) => Path.Combine(_inbox, id + ".json");
     static string MessageId(string kind, string key) => kind + ":" + key;
     static bool Terminal(SessionFile s) => s.State is "done" or "waiting_input" or "blocked" or "needs_human";
+
+#pragma warning disable GHCP001
+    static AutopilotOptions BridgeAutopilotOptions() => new()
+    {
+        ContinuationEnabled = true,
+        MaxContinues = 5,
+    };
+#pragma warning restore GHCP001
 
     SessionFile? LoadSession(string id)
     {
@@ -402,6 +411,9 @@ public partial class Scanner
             {
                 WorkingDirectory = _root, AgentDirectories = new List<string> { Path.Combine(_root, ".github", "agents") },
                 OnPermissionRequest = PermissionHandler.ApproveAll,
+#pragma warning disable GHCP001
+                Autopilot = BridgeAutopilotOptions(),
+#pragma warning restore GHCP001
             });
         }
         catch (Exception e) when (m.CreateSession && e.Message.Contains("Session not found", StringComparison.OrdinalIgnoreCase))
@@ -412,6 +424,9 @@ public partial class Scanner
                 SessionId = id, WorkingDirectory = _root, Model = _model,
                 AgentDirectories = new List<string> { Path.Combine(_root, ".github", "agents") }, Agent = m.Agent,
                 OnPermissionRequest = PermissionHandler.ApproveAll,
+#pragma warning disable GHCP001
+                Autopilot = BridgeAutopilotOptions(),
+#pragma warning restore GHCP001
             });
         }
     }

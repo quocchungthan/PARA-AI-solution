@@ -77,6 +77,36 @@ public class ScannerTests
         Assert.Equal("result_fed", h.State.Delegations.Single().Status);
     }
 
+#pragma warning disable GHCP001
+    [Fact]
+    public async Task BridgeSessionsApprovePermissionsAndEnableBoundedAutopilotContinuation()
+    {
+        using var h = new Harness();
+        var resumedId = Guid.NewGuid().ToString();
+        var createdId = Guid.NewGuid().ToString();
+        h.Runtime.Existing[resumedId] = 0;
+        await InboxStore.EnqueueAsync(Path.Combine(h.Data, "inbox", resumedId + ".json"),
+            new InboxMessage { Id = "resume", Prompt = "Continue approved work" });
+        await InboxStore.EnqueueAsync(Path.Combine(h.Data, "inbox", createdId + ".json"),
+            new InboxMessage { Id = "create", Prompt = "Start approved work", CreateSession = true });
+
+        await h.Tick();
+
+        Assert.NotEmpty(h.Runtime.ResumeConfigs);
+        Assert.All(h.Runtime.ResumeConfigs, resumeConfig =>
+        {
+            Assert.NotNull(resumeConfig.OnPermissionRequest);
+            Assert.Equal(true, resumeConfig.Autopilot?.ContinuationEnabled);
+            Assert.Equal(5, resumeConfig.Autopilot?.MaxContinues);
+        });
+
+        var createConfig = Assert.Single(h.Runtime.CreateConfigs);
+        Assert.NotNull(createConfig.OnPermissionRequest);
+        Assert.Equal(true, createConfig.Autopilot?.ContinuationEnabled);
+        Assert.Equal(5, createConfig.Autopilot?.MaxContinues);
+    }
+#pragma warning restore GHCP001
+
     [Fact]
     public async Task FiveTransportFailuresStopRetryingAndSurfaceTheError()
     {
@@ -404,6 +434,8 @@ public class ScannerTests
         public Exception? ResumeError { get; set; }
         public ConcurrentDictionary<string, byte> Existing { get; } = new();
         public ConcurrentQueue<string> Creates { get; } = new();
+        public ConcurrentQueue<SessionConfig> CreateConfigs { get; } = new();
+        public ConcurrentQueue<ResumeSessionConfig> ResumeConfigs { get; } = new();
         public ConcurrentQueue<(string Id, string Prompt)> Sends { get; } = new();
         public Func<string, string, Task<string?>> Handler { get; set; } = (_, _) => Task.FromResult<string?>("done");
         public Task<IAgentSession> CreateAsync(SessionConfig config)
@@ -411,12 +443,16 @@ public class ScannerTests
             var id = config.SessionId!;
             Existing[id] = 0;
             Creates.Enqueue(id);
+            CreateConfigs.Enqueue(config);
             return Task.FromResult<IAgentSession>(new FakeSession(this, id));
         }
-        public Task<IAgentSession> ResumeAsync(string id, ResumeSessionConfig config) =>
-            ResumeError is not null ? Task.FromException<IAgentSession>(ResumeError) : Existing.ContainsKey(id)
+        public Task<IAgentSession> ResumeAsync(string id, ResumeSessionConfig config)
+        {
+            ResumeConfigs.Enqueue(config);
+            return ResumeError is not null ? Task.FromException<IAgentSession>(ResumeError) : Existing.ContainsKey(id)
                 ? Task.FromResult<IAgentSession>(new FakeSession(this, id))
                 : Task.FromException<IAgentSession>(new IOException("Session not found: " + id));
+        }
         sealed class FakeSession(FakeRuntime runtime, string id) : IAgentSession
         {
             public Task<string?> SendAsync(string prompt, TimeSpan timeout)

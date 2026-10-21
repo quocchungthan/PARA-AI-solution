@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.21" />
+    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.25-preview.0" />
   </ItemGroup>
 
 </Project>
