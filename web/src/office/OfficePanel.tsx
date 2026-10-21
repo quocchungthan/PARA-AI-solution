@@ -10,7 +10,8 @@ import { OfficeDetails } from "./OfficeDetails";
 import { openSession, dark } from "../store";
 import { deriveSharedOfficeNotices } from "./model";
 import { SceneBoundary } from "./scene/SceneBoundary";
-import { OFFICE_LAYOUT } from "./layout";
+import {getOfficeStyle} from "./styles/registry";
+import type {OfficeStyleId} from "./styles/types";
 import type { OfficeCameraHandle, SharedOfficeSelection } from "./types";
 export function useMedia(query: string) {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -30,6 +31,9 @@ export function OfficePanel() {
     reducedMotion = useMedia("(prefers-reduced-motion: reduce)");
   const [showScene, setShowScene] = useState(false),
     [retry, setRetry] = useState(0);
+  const [cutaway,setCutaway]=useState(true);
+  const [cameraReady,setCameraReady]=useState<string|null>(null);
+  const [focusedRoom,setFocusedRoom]=useState<string|null>(null);
   const cameraRef = useRef<OfficeCameraHandle | null>(null);
   const region = useRef<HTMLDivElement>(null);
   const Canvas = useMemo(
@@ -37,6 +41,8 @@ export function OfficePanel() {
     [retry],
   );
   if (!runtime) return <p>Waiting for the Bridge snapshot…</p>;
+  const style=getOfficeStyle(runtime.styleId);
+  const switchStyle=(styleId:OfficeStyleId)=>{if(styleId===runtime.styleId)return;setCameraReady(null);dispatchOffice({type:"style",styleId,nowMs:Date.now()});};
   const select = (selection: SharedOfficeSelection) =>
     dispatchOffice({ type: "select", selection });
   const details = (
@@ -104,9 +110,16 @@ export function OfficePanel() {
                   className="officeCameraControls"
                   aria-label="Camera controls"
                 >
+                  <label className="officeStyleControl">Office style <select aria-label="Office style" value={style.id} onChange={e=>switchStyle(e.target.value as OfficeStyleId)}>
+                    <option value="botanical">Botanical Studio</option><option value="precinct">Nine-Nine Precinct</option>
+                  </select></label>
+                  <label className="officeCutaway"><input type="checkbox" checked={cutaway} onChange={e=>setCutaway(e.target.checked)}/>Cutaway walls</label>
+                  {style.id==='precinct'&&['reverse','plan'].map(id=><button key={id} disabled={cameraReady!==style.id} aria-label={id==='reverse'?'Reverse view':'Plan view'} onClick={()=>{cameraRef.current?.focusView(id);setFocusedRoom(null);}}>{id==='reverse'?'Reverse':'Plan'}</button>)}
                   <button
                     aria-label="Home view"
+                    disabled={cameraReady!==style.id}
                     onClick={() => {
+                      setFocusedRoom(null);
                       cameraRef.current?.home();
                       if (region.current)
                         region.current.dataset.camera = "home";
@@ -114,17 +127,19 @@ export function OfficePanel() {
                   >
                     ⌂ Home
                   </button>
-                  {OFFICE_LAYOUT.rooms.map((r) => (
+                  {[...style.layout.rooms,...(style.id==="precinct"?[{id:"kitchenette",name:"Kitchenette"}]:[])].map((r) => (
                     <button
                       key={r.id}
                       aria-label={`Focus ${r.name}`}
+                      disabled={cameraReady!==style.id}
                       onClick={() => {
+                        setFocusedRoom(r.id);
                         cameraRef.current?.focusRoom(r.id);
                         if (region.current)
                           region.current.dataset.camera = r.id;
                       }}
                     >
-                      {r.id === "management"
+                      {style.id === "precinct" ? r.name : r.id === "management"
                         ? "Manager"
                         : r.id === "hr"
                           ? "HR"
@@ -138,16 +153,23 @@ export function OfficePanel() {
                 </div>
                 <SceneBoundary
                   key={retry}
+                  resetKey={style.id}
                   onRetry={() => setRetry((v) => v + 1)}
+                  onFallback={style.id==="precinct"?()=>switchStyle("botanical"):undefined}
                 >
                   <Suspense
                     fallback={
                       <p className="officeLoading">
-                        Preparing Botanical Studio…
+                        Preparing {style.label}…
                       </p>
                     }
                   >
                     <Canvas
+                      style={style}
+                      cutaway={cutaway}
+                      sceneRetry={retry}
+                      focusRoom={focusedRoom}
+                      onFocusRoom={setFocusedRoom}
                       runtime={runtime}
                       model={runtime.model}
                       theme={theme}
@@ -156,8 +178,10 @@ export function OfficePanel() {
                       cameraRef={cameraRef}
                       onSelect={select}
                       onCameraChange={(pose) => {
+                        setCameraReady(runtime.styleId);
                         dispatchOffice({
                           type: "camera",
+                          styleId: runtime.styleId,
                           pose,
                         });
                         if (region.current)

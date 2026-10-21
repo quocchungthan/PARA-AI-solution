@@ -87,11 +87,12 @@ test("characters: ten workers, permanent identities, actor selection and drag pr
   ).toContainText("Session worker");
 });
 
-test("Product Owner is visible and inspectable without a running session", async ({ page }) => {
+for (const styleId of ["botanical","precinct"] as const) test(`Product Owner is visible and inspectable without a running session in ${styleId}`, async ({ page }) => {
   test.setTimeout(60000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   const api = await installSnapshotRoute(page, snapshot([], [], { roles: ["product-owner"] }));
   await page.goto("/");
+  if(styleId === "precinct") await page.getByLabel("Office style", {exact:true}).selectOption(styleId);
   const scene = page.getByLabel("3D office", { exact: true });
   const lead = scene.getByRole("button", { name: "Inspect Product Owner lead", exact: true });
   await expect(lead).toBeVisible({ timeout: 20000 });

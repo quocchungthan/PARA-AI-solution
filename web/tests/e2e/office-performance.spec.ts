@@ -2,11 +2,12 @@ import { test, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { installSnapshotRoute } from "./snapshotRoute";
 import { populated, session } from "../office/fixtures";
-test("performance: maximum population and measured 30-second interaction sample", async ({
+for(const styleId of ['botanical','precinct'] as const)for(const [width,height] of [[1440,900],[390,844]])test(`performance: ${styleId} ${width}px maximum population measured for 30 seconds`, async ({
   page,
   browser,
 }) => {
   test.setTimeout(90000);
+  await page.setViewportSize({width,height});
   const snap = populated(10);
   snap.sessions.push(
     session("second", "coordinator", "needs_human", {
@@ -16,11 +17,14 @@ test("performance: maximum population and measured 30-second interaction sample"
   );
   const api = await installSnapshotRoute(page, snap);
   await page.goto("/");
+  if(width<900)await page.getByRole("button",{name:"Show 3D office",exact:true}).click();
+  if(styleId==='precinct')await page.getByLabel("Office style",{exact:true}).selectOption(styleId);
   const canvas = page.locator(".officeCanvas canvas");
   await expect(canvas).toBeVisible({ timeout: 20000 });
   await expect(canvas).toHaveAttribute("data-draw-calls", /^\d+$/);
   await page.locator(".splash").waitFor({ state: "detached" });
   await page.waitForTimeout(1500);
+  const renderStart=Number(await canvas.getAttribute("data-render-count"));
   const measuring = page.evaluate(
     () =>
       new Promise<{
@@ -28,6 +32,7 @@ test("performance: maximum population and measured 30-second interaction sample"
         meanMs: number;
         p95Ms: number;
         fps: number;
+        elapsedMs: number;
       }>((resolve) => {
         const samples: number[] = [];
         const start = performance.now();
@@ -41,6 +46,7 @@ test("performance: maximum population and measured 30-second interaction sample"
             const meanMs = samples.reduce((a, b) => a + b, 0) / samples.length;
             resolve({
               frames: samples.length,
+              elapsedMs: now-start,
               meanMs,
               p95Ms: samples[Math.floor(samples.length * 0.95)],
               fps: 1000 / meanMs,
@@ -75,6 +81,9 @@ test("performance: maximum population and measured 30-second interaction sample"
       userAgent: navigator.userAgent,
       viewport: [innerWidth, innerHeight],
       dpr: devicePixelRatio,
+      renderDpr:c.getAttribute("data-render-dpr"),
+      buffer:[(c as HTMLCanvasElement).width,(c as HTMLCanvasElement).height],
+      completedRenders:Number(c.getAttribute("data-render-count")),
       renderer: ext
         ? gl?.getParameter(ext.UNMASKED_RENDERER_WEBGL)
         : "unavailable",
@@ -84,16 +93,20 @@ test("performance: maximum population and measured 30-second interaction sample"
       textures: c.getAttribute("data-textures"),
     };
   });
+  await page.emulateMedia({reducedMotion:"reduce"});
+  await page.waitForTimeout(500);const idleStart=Number(await canvas.getAttribute("data-render-count"));
+  await page.waitForTimeout(700);const idleAdditionalRenders=Number(await canvas.getAttribute("data-render-count"))-idleStart;
   await mkdir("test-results/office-evidence", {
     recursive: true,
   });
   await writeFile(
-    "test-results/office-evidence/performance.json",
+    `test-results/office-evidence/performance-${styleId}-${width}-${process.env.OFFICE_GPU_PROFILE==='1'?'gpu':'software'}.json`,
     JSON.stringify(
       {
         browser: browser.version(),
         durationSeconds: 30,
-        characters: 18,
+        characters: 19,styleId,profile:process.env.OFFICE_GPU_PROFILE==='1'?'gpu-requested':'swiftshader',
+        renderedFrames:metadata.completedRenders-renderStart,renderedFps:(metadata.completedRenders-renderStart)*1000/timing.elapsedMs,idleAdditionalRenders,
         ...timing,
         ...metadata,
       },

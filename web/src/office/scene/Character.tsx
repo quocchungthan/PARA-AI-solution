@@ -2,6 +2,8 @@ import { useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Group } from "three";
 import { sampleCharacterPose } from "./motion";
+import {useCharacterRig,useCharacterCastName} from './CharacterAppearance';
+import {useIdleMotion} from './AnimationDriver';
 import type { OfficeRole } from "../types";
 import { box, RiggedBatch, type Voxel, type RigPart } from "./resources";
 export type CharacterKind = "human" | "assistant" | "lead" | "worker";
@@ -29,17 +31,19 @@ export function Character({
   walking?: RefObject<boolean>;
 }) {
   const angles = useRef([0, 0, 0, 0, 0, 0]);
+  const buildRig=useCharacterRig(),castName=useCharacterCastName(),idleMotion=useIdleMotion();
   const body = useRef<Group>(null);
   const seed = useMemo(() => identityHash(identitySeed), [identitySeed]);
   useFrame(({ clock }, delta) => {
+    const frozen=reducedMotion||(!walking?.current&&pose!=='standing'&&activity!=='working'&&!idleMotion);
     const motion = sampleCharacterPose(role, clock.elapsedTime * 1000, {
       activity: pose === "standing" ? "waiting" : activity,
       seed, rest: rest && pose === "seated",
       walking: walking?.current ?? pose === "standing",
-      reducedMotion, human: kind === "human",
+      reducedMotion:frozen, human: kind === "human",
     });
     const target = [0, motion.head, motion.leftArm, motion.rightArm, motion.leftLeg, motion.rightLeg];
-    const blend = reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) * 12);
+    const blend = frozen ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) * 12);
     for (let i = 0; i < target.length; i++)
       angles.current[i] += (target[i] - angles.current[i]) * blend;
     if (body.current)
@@ -149,7 +153,7 @@ export function Character({
     };
   }, [identitySeed, role, kind, pose, rest]);
   const parts = useMemo<readonly RigPart[]>(
-    () => [
+    () => buildRig ? buildRig(kind,role,identitySeed,pose) : [
       { voxels: voxels.body, pivot: [0, 0, 0], axis: "none" },
       { voxels: voxels.head, pivot: [0, 1.7, 0], axis: "y" },
       { voxels: voxels.left, pivot: [-0.44, 1.4, 0], axis: "x" },
@@ -157,11 +161,12 @@ export function Character({
       { voxels: voxels.leftLeg, pivot: [-0.22, 0.85, 0], axis: "x" },
       { voxels: voxels.rightLeg, pivot: [0.22, 0.85, 0], axis: "x" },
     ],
-    [voxels],
+    [voxels,buildRig,kind,role,identitySeed,pose],
   );
   return (
     <group
       ref={body}
+      userData={{castId:castName?.(kind,role,identitySeed)}}
       onClick={(e) => {
         e.stopPropagation();
         if (e.delta <= 4) onSelect();

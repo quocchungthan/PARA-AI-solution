@@ -12,6 +12,9 @@
         addEventListener("error", function (e) {
           var t = e.target;
           if (!t || (t.tagName !== "SCRIPT" && t.tagName !== "LINK")) return;
+          // Lazy imports have local error boundaries and retry controls. A failed
+          // preload must not reload the page before those controls can appear.
+          if (t.tagName === "LINK" && t.rel === "modulepreload") return;
           var k = "asset-reload", n = Date.now();
           if (n - Number(sessionStorage.getItem(k) || 0) < 30000) return;
           sessionStorage.setItem(k, String(n));

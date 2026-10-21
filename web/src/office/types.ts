@@ -1,4 +1,5 @@
 import type { Session, Delegation } from "../store";
+import type { OfficeStyleId } from './styles/types';
 export type OfficeRole =
   | "coordinator"
   | "researcher"
@@ -33,6 +34,7 @@ export type CameraPose = {
 };
 export type OfficeCameraHandle = {
   home(): void;
+  focusView(viewId: string): void;
   focusRoom(roomId: string): void;
 };
 export type WorkerSlot = {
@@ -72,6 +74,8 @@ export type SharedOfficeEvent = {
   originId?: string; delegationKey?: string; createdAt: number; startedAt?: number;
 };
 export type SharedOfficeRuntime = {
+  styleId: OfficeStyleId;
+  camerasByStyle: Partial<Record<OfficeStyleId,CameraPose>>;
   model: SharedOfficeModel;
   selection: SharedOfficeSelection;
   online: boolean;

@@ -17,7 +17,7 @@ test("seats are unique, reserved leads remain separate, all destinations route w
   );
   for (const dest of [
     ...l.seats.map((s) => s.approach),
-    ...l.loungeApproaches,
+    ...l.restSeats.map(s => s.approach),
     ...Object.values(l.leads),
   ]) {
     const route = findRoute(l, l.entry, dest);
@@ -40,7 +40,7 @@ test("seats are unique, reserved leads remain separate, all destinations route w
 test("lounge visits approach the sofa from the front without crossing its rendered backrest", () => {
   const l = OFFICE_LAYOUT;
   for (const origin of [l.leads.researcher, l.leads.coder])
-    for (const seat of l.lounge) {
+    for (const { position: seat } of l.restSeats) {
       const route = findRoute(l, origin, seat);
       assert.deepEqual(
         route.at(-2),

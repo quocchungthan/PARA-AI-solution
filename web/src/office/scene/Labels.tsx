@@ -19,6 +19,9 @@ export function Labels({
 }) {
   const vector = useMemo(() => new Vector3(), []);
   useFrame(({ camera, size }) => {
+    // Projection runs before WebGLRenderer updates its matrices. Demand rendering
+    // may stop after this frame, so never project using the previous camera view.
+    camera.updateMatrixWorld();
     for (const a of anchors) {
       const el = elements.current.get(a.id);
       if (!el) continue;

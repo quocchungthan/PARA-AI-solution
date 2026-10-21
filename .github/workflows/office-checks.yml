@@ -24,6 +24,7 @@ jobs:
       - run: npm run build
       - run: npm run build:ui
       - run: npm run test:e2e:office
+      - run: npm run build -- --base=/office-check/
       - run: npm run test:e2e:office -- --grep 'production:'
         env:
           OFFICE_PRODUCTION: '1'

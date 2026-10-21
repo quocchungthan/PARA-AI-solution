@@ -1,5 +1,12 @@
 import { test } from "node:test";
+import {idleAnimationWindow} from '../../src/office/scene/motion';
 import assert from "node:assert/strict";
+test('idle rendering wakes for bounded gestures with quiet time between them',()=>{
+  assert.deepEqual(idleAnimationWindow(0,0),{active:false,wakeInMs:20000});
+  assert.deepEqual(idleAnimationWindow(20000,0),{active:true,wakeInMs:4000});
+  assert.deepEqual(idleAnimationWindow(24000,0),{active:false,wakeInMs:20000});
+  assert.deepEqual(idleAnimationWindow(25000,0),{active:false,wakeInMs:19000});
+});
 import { samplePath, sampleWorkPose, sampleCharacterPose } from "../../src/office/scene/motion";
 test("movement follows each route segment without cutting corners", () => {
   const path = [

@@ -1,4 +1,8 @@
 import type { Vec3, OfficeRole } from "../types";
+export function idleAnimationWindow(elapsedMs:number,seed:number) {
+  const quiet=20000+(seed>>>0)%20001,period=quiet+4000,phase=Math.max(0,elapsedMs)%period;
+  return {active:phase>=quiet,wakeInMs:phase<quiet?quiet-phase:period-phase};
+}
 export function samplePath(
   points: readonly Vec3[],
   elapsedMs: number,

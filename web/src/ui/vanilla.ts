@@ -113,13 +113,13 @@ export function setParaTheme(theme: ParaTheme): void {
   if (typeof document !== "undefined") {
     document.documentElement.dataset.theme = theme;
   }
-  if (typeof localStorage !== "undefined") {
-    try {
+  try {
+    if (typeof localStorage !== "undefined") {
       localStorage.setItem("bridge-theme", theme);
       localStorage.setItem("para-theme", theme);
-    } catch {
-      /* ignore */
     }
+  } catch {
+    /* ignore */
   }
 }
 

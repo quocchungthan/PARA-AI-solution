@@ -5,9 +5,11 @@ import { box, VoxelBatch, type Voxel } from "./resources";
 export function RoomShell({
   layout,
   p,
+  cutaway=true,
 }: {
   layout: OfficeLayout;
   p: BotanicalPalette;
+  cutaway?: boolean;
 }) {
   const voxels = useMemo(() => {
     const v: Voxel[] = [];
@@ -30,7 +32,7 @@ export function RoomShell({
       );
     }
     for (const w of layout.walls) {
-      const h = w.cutawayHeight;
+      const h = cutaway ? w.cutawayHeight : w.height;
       box(
         v,
         [(w.from[0] + w.to[0]) / 2, h / 2, (w.from[2] + w.to[2]) / 2],
@@ -73,6 +75,6 @@ export function RoomShell({
         );
     }
     return v;
-  }, [layout, p]);
+  }, [layout, p, cutaway]);
   return <VoxelBatch voxels={voxels} />;
 }

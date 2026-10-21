@@ -7,6 +7,10 @@ import {
   type SharedOfficeAction,
 } from "./runtime";
 import type { SharedOfficeRuntime } from "./types";
+import {readOfficePreferences,writeOfficePreferences} from './styles/preferences';
+function presentationStorage():Storage|null { try{return typeof window==='undefined'?null:window.localStorage;}catch{return null;} }
+const storage=presentationStorage();
+const preferences=readOfficePreferences(storage??{getItem:()=>null});
 export const officeRuntime = signal<SharedOfficeRuntime | null>(null);
 export const dismissedOfficeNotices = signal<ReadonlySet<string>>(new Set());
 effect(() => {
@@ -17,6 +21,14 @@ export function dispatchOffice(action: SharedOfficeAction) {
   const current = officeRuntime.peek();
   if (current) officeRuntime.value = reduceSharedOffice(current, action);
 }
+let lastStyle: string | undefined, lastCameras: SharedOfficeRuntime["camerasByStyle"] | undefined;
+effect(()=>{
+  const state=officeRuntime.value;
+  if(state&&storage&&(state.styleId!==lastStyle||state.camerasByStyle!==lastCameras)) {
+    writeOfficePreferences(storage,{version:1,styleId:state.styleId,camerasByStyle:state.camerasByStyle});
+    lastStyle=state.styleId;lastCameras=state.camerasByStyle;
+  }
+});
 let lastSnapshot = snapshot.peek();
 effect(() => {
   const snap = snapshot.value,
@@ -28,6 +40,7 @@ effect(() => {
       deriveSharedOfficeModel(snap),
       online,
       nowMs,
+      preferences,
     );
   else {
     if (snap !== lastSnapshot)
