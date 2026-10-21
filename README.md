@@ -84,6 +84,54 @@ and reprioritization require an explicitly approved planning batch; live
 experiments and implementation need separate approval. This is review guidance,
 not an always-running agent, runtime subscription or automatic CLI wake feature.
 
+Specialist profiles are named for their function, not a person or project:
+
+- **Engineering:** [AI systems researcher](.github/agents/ai-systems-researcher.agent.md),
+  [calculation auditor](.github/agents/calculation-auditor.agent.md),
+  [database investigator](.github/agents/database-investigator.agent.md),
+  [frontend engineer](.github/agents/frontend-engineer.agent.md),
+  [full-stack engineer](.github/agents/full-stack-engineer.agent.md),
+  [maintainability engineer](.github/agents/maintainability-engineer.agent.md),
+  [performance engineer](.github/agents/performance-engineer.agent.md),
+  [software architect](.github/agents/software-architect.agent.md),
+  [platform operations engineer](.github/agents/platform-operations-engineer.agent.md),
+  [browser-extension engineer](.github/agents/browser-extension-engineer.agent.md).
+- **Analysis and validation:** [browser-test engineer](.github/agents/browser-test-engineer.agent.md),
+  [domain-impact analyst](.github/agents/domain-impact-analyst.agent.md),
+  [feature investigator](.github/agents/feature-investigator.agent.md),
+  [code locator](.github/agents/code-locator.agent.md),
+  [review-feedback triager](.github/agents/review-feedback-triager.agent.md),
+  [surgical editor](.github/agents/surgical-editor.agent.md),
+  [workflow-automation analyst](.github/agents/workflow-automation-analyst.agent.md).
+- Existing PARA `coordinator`, `coder`, `researcher`, `reviewer`,
+  `functional-reviewer`, and `scrum-master` remain the canonical general roles.
+
+Reusable skills cover [project-context resolution](.github/skills/project-context-resolution/SKILL.md),
+[feature investigation](.github/skills/feature-investigation/SKILL.md),
+[adapting existing patterns](.github/skills/adapt-existing-patterns/SKILL.md),
+[build versus adopt](.github/skills/build-vs-adopt/SKILL.md),
+[engineering quality review](.github/skills/engineering-quality-review/SKILL.md),
+[performance investigation](.github/skills/performance-investigation/SKILL.md),
+[test-fixture design](.github/skills/test-fixture-design/SKILL.md),
+[browser testing](.github/skills/browser-testing/SKILL.md),
+[full-flow testing](.github/skills/full-flow-testing/SKILL.md),
+[database-migration safety](.github/skills/database-migration-safety/SKILL.md),
+[domain-impact analysis](.github/skills/domain-impact-analysis/SKILL.md), and
+[workflow-automation candidates](.github/skills/workflow-automation-candidates/SKILL.md).
+Task prompt templates are [implement feature](.github/prompts/implement-feature.prompt.md),
+[diagnose failing tests](.github/prompts/diagnose-failing-tests.prompt.md),
+[review maintainability](.github/prompts/review-maintainability.prompt.md),
+[triage review feedback](.github/prompts/triage-review-feedback.prompt.md),
+[generate test scenarios](.github/prompts/generate-test-scenarios.prompt.md), and
+[execute manual browser tests](.github/prompts/execute-manual-browser-tests.prompt.md).
+
+Specialists use project context resolution to identify the active workspace,
+read its instructions, and (when available) search ElderVibe by verified
+workspace/repository names and related terms. Current source and local project
+instructions take precedence over memory. The profiles do not carry over
+employee names, project/business rules, machine paths, secrets, or external
+account privileges from the source collections.
+
 See **[Durable assignment loop](docs/assignment-loop.md)** for the persisted
 architecture, chess-agent lessons, command examples, operating limits and team
 breakdown. Existing scalar `handoff` remains compatible; new team work uses
